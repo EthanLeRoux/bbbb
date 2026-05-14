@@ -156,7 +156,7 @@ export default function Dashboard() {
       <Link to="/review-due" style={styles.reviewLinkCard}>
         <div style={styles.reviewLinkTitle}>Review Calendar</div>
         <div style={styles.reviewLinkText}>
-          Open the central dashboard for Vault, Review Due, and spaced repetition reviews.
+          Track due reviews and weak areas from test performance.
         </div>
       </Link>
 

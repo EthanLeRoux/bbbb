@@ -120,24 +120,6 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         </NavLink>
         
         <NavLink 
-          to="/vault-learning" 
-          style={({ isActive }) => ({
-            color: isActive ? COLORS.accent : COLORS.text,
-            textDecoration: 'none',
-            fontSize: SIZE.sm,
-            fontFamily: FONTS.mono,
-            padding: `${SPACE.xs}px ${SPACE.sm}px`,
-            borderRadius: 4,
-            transition: 'color 0.2s',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-          })}
-          title={isCollapsed ? 'Learning' : ''}
-        >
-          {isCollapsed ? 'L' : 'Vault Learning'}
-        </NavLink>
-        
-        <NavLink 
           to="/review-due" 
           style={({ isActive }) => ({
             color: isActive ? COLORS.accent : COLORS.text,

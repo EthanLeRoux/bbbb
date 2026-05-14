@@ -171,17 +171,17 @@ export default function SpacedRepetitionStats() {
     return (
       <div style={styles.container}>
         <div style={styles.header}>
-          <h2 style={styles.title}>Learning Statistics</h2>
+          <h2 style={styles.title}>Performance Statistics</h2>
         </div>
         <div style={styles.emptyState}>
           <div style={{ marginBottom: SPACE.md }}>
-            <strong>Learning Statistics</strong>
+            <strong>Performance Statistics</strong>
           </div>
           <div style={{ marginBottom: SPACE.md }}>
             Detailed statistics will be available once the spaced repetition system is implemented.
           </div>
           <div style={{ marginTop: SPACE.md, color: COLORS.accent }}>
-            Continue taking tests to build your learning profile!
+            Continue taking tests to build your performance profile.
           </div>
         </div>
       </div>
@@ -192,7 +192,7 @@ export default function SpacedRepetitionStats() {
     return (
       <div style={styles.container}>
         <div style={styles.header}>
-          <h2 style={styles.title}>Learning Statistics</h2>
+          <h2 style={styles.title}>Performance Statistics</h2>
         </div>
         <div style={styles.emptyState}>
           Failed to load statistics
@@ -205,7 +205,7 @@ export default function SpacedRepetitionStats() {
     return (
       <div style={styles.container}>
         <div style={styles.header}>
-          <h2 style={styles.title}>Learning Statistics</h2>
+          <h2 style={styles.title}>Performance Statistics</h2>
         </div>
         <Skeleton count={4} height={60} />
       </div>
@@ -217,7 +217,7 @@ export default function SpacedRepetitionStats() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h2 style={styles.title}>Learning Statistics</h2>
+        <h2 style={styles.title}>Performance Statistics</h2>
       </div>
 
       {/* Core Performance Metrics */}
@@ -336,7 +336,7 @@ export default function SpacedRepetitionStats() {
           </div>
 
           <div style={styles.statCard}>
-            <div style={styles.statLabel}>Learning Efficiency</div>
+            <div style={styles.statLabel}>Review Efficiency</div>
             <div style={styles.statValue}>
               {stats?.avgRetentionStrength >= 2.0 ? 'Excellent' :
                stats?.avgRetentionStrength >= 1.5 ? 'Good' :
@@ -349,7 +349,7 @@ export default function SpacedRepetitionStats() {
       {/* Empty State */}
       {!stats && (
         <div style={styles.emptyState}>
-          No statistics available. Take some tests to see your learning progress!
+          No statistics available. Take some tests to see your performance trends.
         </div>
       )}
     </div>

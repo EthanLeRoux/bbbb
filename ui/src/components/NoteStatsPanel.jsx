@@ -2,7 +2,7 @@
  * NoteStatsPanel
  *
  * Displays spaced-repetition stats for a single vault note.
- * Mirrors the card / stat-grid aesthetic of VaultItemStats.
+ * Uses the same compact card/stat-grid treatment as the rest of the app.
  *
  * Props
  *   noteId   — the note slug e.g. "mathematics/algebra/quadratics"

@@ -10,7 +10,6 @@ import TestDetail from '../pages/TestDetail';
 import AttemptList from '../pages/AttemptList';
 import AttemptDetail from '../pages/AttemptDetail';
 import Statistics from '../pages/Statistics';
-import VaultLearningPage from '../pages/VaultLearningPage';
 import SpacedRepetitionDue from '../pages/SpacedRepetitionDue';
 import CardBrowser from '../pages/CardBrowser';
 
@@ -55,7 +54,6 @@ export {
   AttemptList,
   AttemptDetail,
   Statistics,
-  VaultLearningPage,
   SpacedRepetitionDue,
   CardBrowser,
 };

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAllNotes } from '../api/vault';
 import NoteStatsPanel from '../components/NoteStatsPanel';
-import VaultItemStats from '../components/VaultItemStats';
 import { COLORS, FONTS, SIZE, SPACE } from '../constants';
 
 const styles = {
@@ -189,7 +188,7 @@ export default function CardBrowser() {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Card Browser</h1>
-        <p style={styles.subtitle}>Browse, search, inspect, and review vault cards</p>
+        <p style={styles.subtitle}>Browse, search, and inspect source cards used for assessments</p>
       </div>
 
       {notesError && (
@@ -262,7 +261,6 @@ export default function CardBrowser() {
               </div>
 
               <NoteStatsPanel noteId={selectedVault.vaultId} noteTitle={selectedVault.title} />
-              <VaultItemStats vaultId={selectedVault.vaultId} />
             </div>
           ) : (
             <div style={styles.loadingState}>

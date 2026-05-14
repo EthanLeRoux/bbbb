@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../api/client';
 import { getReviewSchedule } from '../api/spacedRepetition';
-import { getVaultReviewSchedule } from '../api/vaultSpacedRepetition';
 import Skeleton from './Skeleton';
 import { COLORS, FONTS, SIZE, SPACE } from '../constants';
 
@@ -206,7 +205,6 @@ function formatDay(dateString) {
 }
 
 function sourceLabel(source) {
-  if (source === 'vault') return 'Vault';
   if (source === 'review-due') return 'Review Due';
   return 'Spaced Repetition';
 }
@@ -352,25 +350,20 @@ export default function UnifiedReviewDashboard() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['unified-review-dashboard', timeRange],
     queryFn: async () => {
-      const [vault, spaced, reviewDue] = await Promise.allSettled([
-        getVaultReviewSchedule({ timeRange, limit: 100 }),
+      const [spaced, reviewDue] = await Promise.allSettled([
         getReviewSchedule(100),
         get('/api/review-due'),
       ]);
       return {
-        vault: vault.status === 'fulfilled' ? vault.value : null,
         spaced: spaced.status === 'fulfilled' ? spaced.value : null,
         reviewDue: reviewDue.status === 'fulfilled' ? reviewDue.value : null,
-        failures: [vault, spaced, reviewDue].filter(result => result.status === 'rejected'),
+        failures: [spaced, reviewDue].filter(result => result.status === 'rejected'),
       };
     },
   });
 
   const allItems = useMemo(() => {
     const items = [
-      ...normalizeItems(data?.vault?.due, 'vault', 'due'),
-      ...normalizeItems(data?.vault?.upcoming, 'vault', 'upcoming'),
-      ...normalizeItems(data?.vault?.completed, 'vault', 'completed'),
       ...normalizeItems(data?.spaced?.due, 'spaced', 'due'),
       ...normalizeItems(data?.spaced?.upcoming, 'spaced', 'upcoming'),
       ...normalizeItems(data?.spaced?.completed, 'spaced', 'completed'),
@@ -400,7 +393,7 @@ export default function UnifiedReviewDashboard() {
       <div style={styles.container}>
         <div style={styles.header}>
           <h1 style={styles.title}>Review Calendar</h1>
-          <div style={styles.subtitle}>Loading all review sources...</div>
+          <div style={styles.subtitle}>Loading review data...</div>
         </div>
         <Skeleton count={5} height={72} />
       </div>
@@ -422,7 +415,7 @@ export default function UnifiedReviewDashboard() {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Review Calendar</h1>
-        <div style={styles.subtitle}>One calendar for Vault, Review Due, and spaced repetition reviews.</div>
+        <div style={styles.subtitle}>Track due reviews and weak areas from test performance.</div>
       </div>
 
       <div style={styles.controls}>
@@ -434,7 +427,6 @@ export default function UnifiedReviewDashboard() {
         </select>
         <select style={styles.select} value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="">All sources</option>
-          <option value="vault">Vault</option>
           <option value="review-due">Review Due</option>
           <option value="spaced">Spaced Repetition</option>
         </select>
