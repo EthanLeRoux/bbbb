@@ -11,18 +11,19 @@ class PromptBuilder {
    * @param {Object} params - Prompt parameters
    * @param {string} params.domain - Knowledge domain
    * @param {string|string[]} params.sections - Section(s) within domain, or 'all' for domain-wide
+   * @param {string|string[]|Object} [params.topics] - Optional topic filter, or section-to-topics map
    * @param {Array} params.notes - Array of vault notes with content
    * @param {string} params.difficulty - 'easy', 'medium', 'hard', or 'mixed'
    * @param {number} params.questionCount - Number of questions to generate
    * @param {string} [params.testName] - Optional custom name for the test
    * @returns {string} Optimized prompt for OpenAI
    */
-  static buildPrompt({ domain, sections, notes, difficulty, questionCount, testName }) {
+  static buildPrompt({ domain, sections, topics, notes, difficulty, questionCount, testName }) {
     const cleanedContent = this._cleanAndAggregateNotes(notes);
     const keyConcepts = this._extractKeyConcepts(cleanedContent);
-    const scopeDescription = this._getScopeDescription(sections);
+    const scopeDescription = this._getScopeDescription(sections, topics);
     const difficultyInstructions = this._getDifficultyInstructions(difficulty);
-    const topic = this._getTopic(sections);
+    const topic = this._getTopic(sections, topics);
     const nameContext = testName ? `\n- Test Name: "${testName}"` : '';
 
     // Build a structured note index so the AI can reference exact vault IDs.
@@ -263,11 +264,14 @@ DIFFICULTY: Mixed
    * @returns {string} Scope description
    * @private
    */
-  static _getScopeDescription(sections) {
-    if (sections === 'all') return 'All sections in the domain';
-    if (typeof sections === 'string') return `Section: ${sections}`;
-    if (Array.isArray(sections)) return `Sections: ${sections.join(', ')}`;
-    return 'Unknown scope';
+  static _getScopeDescription(sections, topics) {
+    let sectionScope = 'Unknown scope';
+    if (sections === 'all') sectionScope = 'All sections in the domain';
+    else if (typeof sections === 'string') sectionScope = `Section: ${sections}`;
+    else if (Array.isArray(sections)) sectionScope = `Sections: ${sections.join(', ')}`;
+
+    const topicScope = this._getTopicSelectionLabel(topics);
+    return topicScope ? `${sectionScope}; Topics: ${topicScope}` : sectionScope;
   }
 
   /**
@@ -277,11 +281,29 @@ DIFFICULTY: Mixed
    * @returns {string} Topic name
    * @private
    */
-  static _getTopic(sections) {
+  static _getTopic(sections, topics) {
+    const topicScope = this._getTopicSelectionLabel(topics);
+    if (topicScope) return topicScope;
     if (sections === 'all') return 'Domain-wide';
     if (typeof sections === 'string') return sections;
     if (Array.isArray(sections)) return sections.length === 1 ? sections[0] : `${sections.length} sections`;
     return 'Unknown';
+  }
+
+  static _getTopicSelectionLabel(topics) {
+    if (!topics) return '';
+    if (typeof topics === 'string') return topics;
+    if (Array.isArray(topics)) return topics.join(', ');
+    if (typeof topics === 'object') {
+      return Object.entries(topics)
+        .map(([section, selectedTopics]) => {
+          if (selectedTopics === 'all') return `${section}: all topics`;
+          if (Array.isArray(selectedTopics)) return `${section}: ${selectedTopics.join(', ')}`;
+          return `${section}: ${selectedTopics}`;
+        })
+        .join('; ');
+    }
+    return '';
   }
 }
 

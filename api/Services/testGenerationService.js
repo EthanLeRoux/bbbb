@@ -21,21 +21,23 @@ class TestGenerationService {
    * @param {Object} params - Test generation parameters
    * @param {string} params.domain - Knowledge domain
    * @param {string|string[]} params.sections - Section(s) within domain, or 'all' for domain-wide
+   * @param {string|string[]|Object} [params.topics] - Optional topic filter, or section-to-topics map
    * @param {string} params.difficulty - 'easy', 'medium', 'hard', or 'mixed'
    * @param {number} params.questionCount - Number of questions to generate
    * @param {string} [params.name] - Optional custom name for the test
    * @returns {Promise<Object>} Generated test data
    */
-  async generateShortAnswerTest({ domain, sections, difficulty, questionCount, name }) {
-    console.log(`[TestGeneration] Starting test generation for ${domain}/${JSON.stringify(sections)}`);
+  async generateShortAnswerTest({ domain, sections, topics, difficulty, questionCount, name }) {
+    console.log(`[TestGeneration] Starting test generation for ${domain}/${JSON.stringify(sections)} topics=${JSON.stringify(topics || 'all')}`);
 
-    this._validateInput({ domain, sections, difficulty, questionCount, name });
+    this._validateInput({ domain, sections, topics, difficulty, questionCount, name });
 
-    const notes = await this._retrieveVaultNotes(domain, sections);
+    const notes = await this._retrieveVaultNotes(domain, sections, topics);
 
     const prompt = PromptBuilder.buildPrompt({
       domain,
       sections,
+      topics,
       notes,
       difficulty,
       questionCount,
@@ -49,6 +51,7 @@ class TestGenerationService {
       questionCount,
       domain,
       sections,
+      topics,
       name,
       notes,
     );
@@ -65,7 +68,7 @@ class TestGenerationService {
 
   // ─── Validation ─────────────────────────────────────────────────────────────
 
-  _validateInput({ domain, sections, difficulty, questionCount, name }) {
+  _validateInput({ domain, sections, topics, difficulty, questionCount, name }) {
     if (!domain || typeof domain !== 'string' || domain.trim().length === 0) {
       throw new Error('Domain is required and must be a non-empty string');
     }
@@ -84,6 +87,8 @@ class TestGenerationService {
     } else {
       throw new Error('Sections must be a string, array of strings, or "all"');
     }
+
+    this._normalizeTopicSelection(topics);
 
     const validDifficulties = ['easy', 'medium', 'hard', 'mixed'];
     if (!validDifficulties.includes(difficulty)) {
@@ -106,7 +111,7 @@ class TestGenerationService {
 
   // ─── Note retrieval ──────────────────────────────────────────────────────────
 
-  async _retrieveVaultNotes(domain, sections) {
+  async _retrieveVaultNotes(domain, sections, topics) {
     try {
       let notes = [];
       let scopeDescription = '';
@@ -114,18 +119,23 @@ class TestGenerationService {
       if (sections === 'all') {
         const domainSections = await this.vaultService.getSectionsByDomain(domain);
         for (const sectionData of domainSections) {
-          if (sectionData.notes?.length > 0) notes.push(...sectionData.notes);
+          const sectionNotes = this._filterNotesByTopics(
+            sectionData.notes || [],
+            this._getTopicsForSection(topics, sectionData.name)
+          );
+          if (sectionNotes.length > 0) notes.push(...sectionNotes);
         }
-        scopeDescription = `all sections in domain "${domain}"`;
+        scopeDescription = this._describeScope(domain, sections, topics);
       } else if (typeof sections === 'string') {
-        notes = await this.vaultService.getNotesBySection(domain, sections);
-        scopeDescription = `section "${sections}" in domain "${domain}"`;
+        const sectionNotes = await this.vaultService.getNotesBySection(domain, sections);
+        notes = this._filterNotesByTopics(sectionNotes, this._getTopicsForSection(topics, sections));
+        scopeDescription = this._describeScope(domain, sections, topics);
       } else if (Array.isArray(sections)) {
         for (const section of sections) {
           const sectionNotes = await this.vaultService.getNotesBySection(domain, section);
-          notes.push(...sectionNotes);
+          notes.push(...this._filterNotesByTopics(sectionNotes, this._getTopicsForSection(topics, section)));
         }
-        scopeDescription = `sections [${sections.join(', ')}] in domain "${domain}"`;
+        scopeDescription = this._describeScope(domain, sections, topics);
       }
 
       if (!notes || notes.length === 0) {
@@ -142,6 +152,85 @@ class TestGenerationService {
     }
   }
 
+  _normalizeTopicSelection(topics) {
+    if (topics === undefined || topics === null) return null;
+
+    const normalizeList = value => {
+      if (value === 'all') return null;
+      if (typeof value === 'string') {
+        if (value.trim().length === 0) throw new Error('Topic cannot be an empty string');
+        return [value.trim()];
+      }
+      if (Array.isArray(value)) {
+        if (value.length === 0) throw new Error('Topics array cannot be empty');
+        if (!value.every(t => typeof t === 'string' && t.trim().length > 0)) {
+          throw new Error('All topics must be non-empty strings');
+        }
+        return value.map(t => t.trim());
+      }
+      throw new Error('Topics must be a string, array of strings, or section-to-topics object');
+    };
+
+    if (typeof topics === 'string' || Array.isArray(topics)) {
+      return normalizeList(topics);
+    }
+
+    if (typeof topics === 'object') {
+      const normalized = {};
+      for (const [section, selectedTopics] of Object.entries(topics)) {
+        if (!section || section.trim().length === 0) {
+          throw new Error('Topic map section keys must be non-empty strings');
+        }
+        normalized[section] = normalizeList(selectedTopics);
+      }
+      return normalized;
+    }
+
+    throw new Error('Topics must be a string, array of strings, or section-to-topics object');
+  }
+
+  _getTopicsForSection(topics, section) {
+    const normalized = this._normalizeTopicSelection(topics);
+    if (!normalized) return null;
+    if (Array.isArray(normalized)) return normalized;
+
+    const selected = normalized[section] || normalized['*'] || normalized._all;
+    return selected || null;
+  }
+
+  _filterNotesByTopics(notes, topics) {
+    if (!topics || topics.length === 0) return notes;
+
+    const selected = new Set(topics.map(topic => this._normalizeComparable(topic)));
+    return notes.filter(note => selected.has(this._normalizeComparable(note.topic || 'Uncategorized')));
+  }
+
+  _describeScope(domain, sections, topics) {
+    const sectionDescription = sections === 'all'
+      ? `all sections in domain "${domain}"`
+      : Array.isArray(sections)
+        ? `sections [${sections.join(', ')}] in domain "${domain}"`
+        : `section "${sections}" in domain "${domain}"`;
+
+    const topicSummary = this._topicSelectionLabel(topics);
+    return topicSummary ? `${sectionDescription}, topics ${topicSummary}` : sectionDescription;
+  }
+
+  _topicSelectionLabel(topics) {
+    const normalized = this._normalizeTopicSelection(topics);
+    if (!normalized) return '';
+    if (Array.isArray(normalized)) return `[${normalized.join(', ')}]`;
+
+    const parts = Object.entries(normalized)
+      .filter(([, selectedTopics]) => selectedTopics && selectedTopics.length > 0)
+      .map(([section, selectedTopics]) => `${section}: [${selectedTopics.join(', ')}]`);
+    return parts.length ? `{ ${parts.join('; ')} }` : '';
+  }
+
+  _normalizeComparable(value) {
+    return `${value || ''}`.trim().toLowerCase();
+  }
+
   // ─── Response validation & source-note resolution ────────────────────────────
 
   /**
@@ -154,7 +243,7 @@ class TestGenerationService {
    *   3. Minimal synthetic note objects built from sourceConcept strings
    *      (last resort so sourceNotes is never the entire section)
    */
-  _validateTestResponse(aiResponse, expectedQuestionCount, domain, sections, name, notes) {
+  _validateTestResponse(aiResponse, expectedQuestionCount, domain, sections, topics, name, notes) {
     const actualQuestionCount = aiResponse.shortAnswerQuestions.length;
     if (actualQuestionCount !== expectedQuestionCount) {
       console.warn(
@@ -170,6 +259,7 @@ class TestGenerationService {
     }
 
     const sectionForStorage = Array.isArray(sections) ? sections.join(', ') : sections;
+    const topicForStorage = this._topicSelectionLabel(topics) || aiResponse.topic;
 
     // ── 1. Exact match via sourceNoteId slug ───────────────────────────────
     const usedNoteIds = new Set(
@@ -238,7 +328,7 @@ class TestGenerationService {
     return {
       domain,
       section: sectionForStorage,
-      topic: aiResponse.topic,
+      topic: topicForStorage,
       difficulty: aiResponse.difficulty,
       name,
       shortAnswerQuestions: aiResponse.shortAnswerQuestions.map(q => ({

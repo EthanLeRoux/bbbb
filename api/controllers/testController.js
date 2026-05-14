@@ -17,7 +17,7 @@ class TestController {
    */
   generateTest = async (req, res, next) => {
     try {
-      const { domain, sections, difficulty, questionCount, name } = req.body;
+      const { domain, sections, topics, difficulty, questionCount, name } = req.body;
 
       // Validate request body
       const validationError = this._validateGenerateRequest(req.body);
@@ -32,6 +32,7 @@ class TestController {
       const savedTest = await this.testService.generateShortAnswerTest({
         domain,
         sections,
+        topics,
         difficulty,
         questionCount,
         name
@@ -369,7 +370,7 @@ class TestController {
    * @private
    */
   _validateGenerateRequest(body) {
-    const { domain, sections, difficulty, questionCount, name } = body;
+    const { domain, sections, topics, difficulty, questionCount, name } = body;
 
     if (!domain || typeof domain !== 'string' || domain.trim().length === 0) {
       return new Error('Domain is required and must be a non-empty string');
@@ -397,6 +398,48 @@ class TestController {
       }
     } else {
       return new Error('Sections must be a string, array of strings, or "all"');
+    }
+
+    if (topics !== undefined) {
+      if (typeof topics === 'string') {
+        if (topics.trim().length === 0) {
+          return new Error('Topic cannot be an empty string');
+        }
+      } else if (Array.isArray(topics)) {
+        if (topics.length === 0) {
+          return new Error('Topics array cannot be empty');
+        }
+        if (!topics.every(t => typeof t === 'string' && t.trim().length > 0)) {
+          return new Error('All topics in array must be non-empty strings');
+        }
+      } else if (typeof topics === 'object' && topics !== null) {
+        const entries = Object.entries(topics);
+        if (entries.length === 0) {
+          return new Error('Topics object cannot be empty');
+        }
+        for (const [section, selectedTopics] of entries) {
+          if (!section || section.trim().length === 0) {
+            return new Error('Topic map section keys must be non-empty strings');
+          }
+          if (selectedTopics === 'all') continue;
+          if (typeof selectedTopics === 'string') {
+            if (selectedTopics.trim().length === 0) {
+              return new Error('Topic map values must be non-empty strings, arrays, or "all"');
+            }
+          } else if (Array.isArray(selectedTopics)) {
+            if (selectedTopics.length === 0) {
+              return new Error('Topic arrays cannot be empty');
+            }
+            if (!selectedTopics.every(t => typeof t === 'string' && t.trim().length > 0)) {
+              return new Error('All mapped topics must be non-empty strings');
+            }
+          } else {
+            return new Error('Topic map values must be strings, arrays, or "all"');
+          }
+        }
+      } else {
+        return new Error('Topics must be a string, array of strings, or section-to-topics object');
+      }
     }
 
     const validDifficulties = ['easy', 'medium', 'hard', 'mixed'];

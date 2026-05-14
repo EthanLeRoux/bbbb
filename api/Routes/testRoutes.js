@@ -57,6 +57,7 @@ router.get('/docs', (req, res) => {
         requestBody: {
           domain: 'string (required) - Knowledge domain (e.g., "network-security")',
           sections: 'string|array|string "all" (required) - Section(s) within domain, or "all" for domain-wide',
+          topics: 'string|array|object (optional) - Topic(s) to generate from. For multiple sections, use { "section-name": ["topic-a", "topic-b"] }',
           difficulty: 'string (required) - "easy", "medium", "hard", or "mixed"',
           questionCount: 'number (required) - Number of questions (1-50)',
           name: 'string (optional) - Custom name for the test (max 100 characters)'
@@ -69,9 +70,21 @@ router.get('/docs', (req, res) => {
             questionCount: 10,
             name: 'DNS Fundamentals Quiz'
           },
+          topicFocused: {
+            domain: 'network-security',
+            sections: 'dns',
+            topics: ['recursive-resolution', 'dns-records'],
+            difficulty: 'medium',
+            questionCount: 8,
+            name: 'DNS Topic Drill'
+          },
           multipleSections: {
             domain: 'network-security',
             sections: ['dns', 'firewalls', 'encryption'],
+            topics: {
+              dns: ['dns-records'],
+              firewalls: ['packet-filtering', 'stateful-inspection']
+            },
             difficulty: 'mixed',
             questionCount: 15,
             name: 'Security Essentials Test'

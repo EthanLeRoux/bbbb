@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getDomains, getSections } from '../api/vault';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getDomains, getSections, getTopics } from '../api/vault';
 import { generateTest } from '../api/tests';
 import Skeleton from '../components/Skeleton';
 import { COLORS, FONTS, SPACE, SIZE, LABELS } from '../constants';
@@ -136,6 +136,7 @@ export default function GenerateTest() {
     name: '',
     domain: '',
     sections: [],
+    topics: {},
     allSections: false,
     difficulty: 'mixed',
     questionCount: 10,
@@ -152,6 +153,21 @@ export default function GenerateTest() {
     enabled: !!formData.domain
   });
 
+  const selectedSections = formData.allSections ? [] : formData.sections;
+  const topicQueries = useQueries({
+    queries: selectedSections.map((section) => ({
+      queryKey: ['vault', formData.domain, section, 'topics'],
+      queryFn: () => getTopics(formData.domain, section),
+      enabled: !!formData.domain && !!section,
+    })),
+  });
+
+  const topicsBySection = selectedSections.reduce((acc, section, index) => {
+    acc[section] = topicQueries[index]?.data || [];
+    return acc;
+  }, {});
+  const topicsLoading = topicQueries.some(query => query.isLoading);
+
   const mutation = useMutation({
     mutationFn: generateTest,
     onSuccess: (data) => {
@@ -165,6 +181,7 @@ export default function GenerateTest() {
       ...formData,
       domain: e.target.value,
       sections: [],
+      topics: {},
       allSections: false,
     });
   };
@@ -175,18 +192,40 @@ export default function GenerateTest() {
         ...formData,
         allSections: !formData.allSections,
         sections: [],
+        topics: {},
       });
     } else {
       const newSections = formData.sections.includes(section)
         ? formData.sections.filter(s => s !== section)
         : [...formData.sections, section];
+      const newTopics = { ...formData.topics };
+      if (!newSections.includes(section)) {
+        delete newTopics[section];
+      }
       
       setFormData({
         ...formData,
         sections: newSections,
+        topics: newTopics,
         allSections: false,
       });
     }
+  };
+
+  const handleTopicToggle = (section, topic) => {
+    const sectionTopics = formData.topics[section] || [];
+    const newSectionTopics = sectionTopics.includes(topic)
+      ? sectionTopics.filter(t => t !== topic)
+      : [...sectionTopics, topic];
+    const newTopics = { ...formData.topics };
+
+    if (newSectionTopics.length > 0) {
+      newTopics[section] = newSectionTopics;
+    } else {
+      delete newTopics[section];
+    }
+
+    setFormData({ ...formData, topics: newTopics });
   };
 
   const handleDifficultyChange = (difficulty) => {
@@ -203,11 +242,15 @@ export default function GenerateTest() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const selectedTopics = Object.fromEntries(
+      Object.entries(formData.topics).filter(([, topics]) => topics.length > 0)
+    );
     
     const payload = {
       name: formData.name || undefined,
       domain: formData.domain,
       sections: formData.allSections ? 'all' : formData.sections,
+      topics: Object.keys(selectedTopics).length > 0 ? selectedTopics : undefined,
       difficulty: formData.difficulty,
       questionCount: formData.questionCount,
     };
@@ -303,6 +346,48 @@ export default function GenerateTest() {
             </div>
           )}
         </div>
+
+        {!formData.allSections && formData.sections.length > 0 && (
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Topics</label>
+            {topicsLoading ? (
+              <Skeleton height={120} />
+            ) : (
+              <div style={styles.checkboxContainer}>
+                {selectedSections.map((section) => {
+                  const sectionTopics = topicsBySection[section] || [];
+                  return (
+                    <div key={section}>
+                      <div style={{ ...styles.label, marginBottom: SPACE.xs }}>
+                        {section}
+                      </div>
+                      {sectionTopics.length === 0 ? (
+                        <div style={{ color: COLORS.muted, fontFamily: FONTS.mono, fontSize: SIZE.sm }}>
+                          No topics found
+                        </div>
+                      ) : (
+                        sectionTopics.map((topic) => (
+                          <label key={`${section}-${topic.name}`} style={styles.checkboxLabel}>
+                            <input
+                              type="checkbox"
+                              checked={(formData.topics[section] || []).includes(topic.name)}
+                              onChange={() => handleTopicToggle(section, topic.name)}
+                              style={styles.checkbox}
+                            />
+                            {topic.name}
+                            {topic.noteCount !== undefined && (
+                              <span style={{ color: COLORS.muted }}>({topic.noteCount})</span>
+                            )}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={styles.formGroup}>
           <label style={styles.label}>{LABELS.generate.difficulty}</label>
