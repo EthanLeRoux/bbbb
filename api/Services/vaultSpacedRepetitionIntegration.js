@@ -3,13 +3,8 @@
  * VAULT - SPACED REPETITION INTEGRATION (updated)
  * =====================================================
  *
- * Key change: vault items live on the filesystem (VaultService),
- * not in Firestore.  The vaultId is a stable key derived by the
- * frontend as:  domain__section__fileNameStem
- *
- * This lets us:
- *  - Resolve domain / section / materialId without a Firestore lookup
- *  - Look up the actual note content via VaultService when needed
+ * Vault items live on the filesystem (VaultService), not in Firestore.
+ * The vaultId is the Obsidian card id and is the primary key for state.
  */
 
 'use strict';
@@ -17,9 +12,6 @@
 const SpacedRepetitionService = require('./spacedRepetitionService');
 const VaultService = require('./vaultService');
 const { getFirestore } = require('firebase-admin/firestore');
-
-/** Separator used when building the compound vaultId key. */
-const ID_SEP = '__';
 
 class VaultSpacedRepetitionIntegration {
   constructor() {
@@ -32,24 +24,12 @@ class VaultSpacedRepetitionIntegration {
   // ─── vaultId helpers ────────────────────────────────────────────────────────
 
   /**
-   * Parse a compound vaultId back into its parts.
-   * Format:  domain__section__fileNameStem
-   *
-   * Falls back gracefully for legacy / unknown ids.
+   * Legacy helper retained for callers that still expect this shape.
    *
    * @param {string} vaultId
    * @returns {{ domain: string, section: string, stem: string, isCompound: boolean }}
    */
   parseVaultId(vaultId) {
-    const parts = vaultId.split(ID_SEP);
-    if (parts.length >= 3) {
-      return {
-        domain: parts[0],
-        section: parts[1],
-        stem: parts.slice(2).join(ID_SEP),
-        isCompound: true,
-      };
-    }
     return { domain: 'general', section: 'main', stem: vaultId, isCompound: false };
   }
 
@@ -62,9 +42,7 @@ class VaultSpacedRepetitionIntegration {
    */
   async getVaultItem(vaultId) {
     try {
-      const { domain, section, stem } = this.parseVaultId(vaultId);
-      const notes = await this.vaultService.getNotesBySection(domain, section);
-      return notes.find(n => n.fileName.replace(/\.md$/i, '') === stem) || null;
+      return await this.vaultService.getNoteById(vaultId);
     } catch {
       return null;
     }
@@ -73,20 +51,17 @@ class VaultSpacedRepetitionIntegration {
   // ─── Hierarchy mapping ──────────────────────────────────────────────────────
 
   /**
-   * Derive the spaced-repetition hierarchy from a vaultId.
-   * Uses the compound key directly — no Firestore needed.
+   * Derive the spaced-repetition hierarchy from vault frontmatter.
    *
    * @param {string} vaultId
    * @param {import('./vaultService').Note | null} note
    * @returns {{ domainId: string, sectionId: string, materialId: string }}
    */
   mapVaultToHierarchy(vaultId, note) {
-    const { domain, section } = this.parseVaultId(vaultId);
-
     return {
-      domainId: domain,
-      sectionId: section,
-      materialId: vaultId,   // use the full compound key as the stable material id
+      domainId: note?.domain || 'general',
+      sectionId: note?.section || 'main',
+      materialId: vaultId,
     };
   }
 
@@ -138,7 +113,7 @@ class VaultSpacedRepetitionIntegration {
           title: note?.title || testData.vaultId,
           domain: this.formatFolderName(hierarchyData.domainId),
           section: this.formatFolderName(hierarchyData.sectionId),
-          path: note ? `${note.domain}/${note.section}/${note.fileName}` : testData.vaultId,
+          path: note ? `${note.domain}/${note.section}/${note.topic}/${note.fileName}` : testData.vaultId,
         },
         spacedRepetitionResult: { data: result },
         hierarchyMapping: hierarchyData,
@@ -165,7 +140,10 @@ class VaultSpacedRepetitionIntegration {
           vaultId,
           ...hierarchyData,
           title: note?.title || vaultId,
-          fileName: note?.fileName || '',
+          type: note?.type || '',
+          topic: note?.topic || '',
+          source: note?.source || '',
+          tags: note?.tags || [],
           createdAt: new Date(),
           updatedAt: new Date(),
         }, { merge: true });
@@ -443,12 +421,12 @@ class VaultSpacedRepetitionIntegration {
       if (!statsDoc.exists) return null;
 
       const s = statsDoc.data();
-      const { domain, section } = this.parseVaultId(vaultId);
+      const note = await this.getVaultItem(vaultId);
 
       return {
         vaultId,
-        domainId: domain,
-        sectionId: section,
+        domainId: note?.domain || s.domainId || 'general',
+        sectionId: note?.section || s.sectionId || 'main',
         materialId: vaultId,
         spacedRepetitionStats: {
           avgScore: s.avgScore,
@@ -473,15 +451,18 @@ class VaultSpacedRepetitionIntegration {
   async getVaultInfoFromMaterial(materialId) {
     try {
       const note = await this.getVaultItem(materialId);
-      const { domain, section } = this.parseVaultId(materialId);
+      const domain = note?.domain || 'general';
+      const section = note?.section || 'main';
 
       return {
         vaultId: materialId,
         title: note?.title || materialId,
         domain: this.formatFolderName(domain),
         section: this.formatFolderName(section),
-        path: note ? `${note.domain}/${note.section}/${note.fileName}` : '',
-        folders: note ? [note.domain, note.section] : [],
+        topic: note?.topic || '',
+        tags: note?.tags || [],
+        path: note ? `${note.domain}/${note.section}/${note.topic}/${note.fileName}` : '',
+        folders: note ? [note.domain, note.section, note.topic] : [],
       };
     } catch (error) {
       console.error('[VaultIntegration] Error getting vault info from material:', error);
@@ -501,7 +482,7 @@ class VaultSpacedRepetitionIntegration {
     const processed = [];
 
     for (const note of notes) {
-      const vaultId = `${note.domain}${ID_SEP}${note.section}${ID_SEP}${note.fileName.replace(/\.md$/i, '')}`;
+      const vaultId = note.id;
       const hierarchyData = this.mapVaultToHierarchy(vaultId, note);
       await this.storeVaultMapping(vaultId, hierarchyData, note);
       processed.push({ vaultId, title: note.title, hierarchy: hierarchyData });

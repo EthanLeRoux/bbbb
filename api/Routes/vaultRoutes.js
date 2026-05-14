@@ -3,12 +3,15 @@
 const express = require('express');
 const router = express.Router();
 const VaultService = require('../Services/vaultService');
+const VaultCardStateService = require('../Services/vaultCardStateService');
 
 // ─── Service initialisation ───────────────────────────────────────────────────
 
 let vaultService;
+let vaultCardStateService;
 try {
   vaultService = new VaultService();
+  vaultCardStateService = new VaultCardStateService();
 } catch (error) {
   console.error('[VaultRouter] Failed to initialise VaultService:', error.message);
 }
@@ -20,6 +23,16 @@ const checkVaultService = (req, res, next) => {
     return res.status(503).json({
       success: false,
       error: 'Vault service unavailable. Check VAULT_PATH environment variable.',
+    });
+  }
+  next();
+};
+
+const checkVaultCardStateService = (req, res, next) => {
+  if (!vaultCardStateService) {
+    return res.status(503).json({
+      success: false,
+      error: 'Vault card state service unavailable. Check VAULT_PATH and Firebase configuration.',
     });
   }
   next();
@@ -84,6 +97,30 @@ router.get('/search', checkVaultService, asyncHandler(async (req, res) => {
 router.get('/stats', checkVaultService, asyncHandler(async (req, res) => {
   const stats = await vaultService.getVaultStats();
   res.json({ success: true, data: stats });
+}));
+
+// POST /api/vault/sync
+router.post('/sync', checkVaultCardStateService, asyncHandler(async (req, res) => {
+  const result = await vaultCardStateService.syncVaultCards();
+  res.json({
+    success: true,
+    data: result,
+    message: 'Vault cards synced to Firebase state layer without storing markdown content',
+  });
+}));
+
+// GET /api/vault/cards/:id
+router.get('/cards/:id', checkVaultCardStateService, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const result = await vaultCardStateService.getCardWithState(id);
+  if (!result) return res.status(404).json({ success: false, error: `Card "${id}" not found in vault` });
+  res.json({ success: true, data: result });
+}));
+
+// GET /api/vault/invalid
+router.get('/invalid', checkVaultService, asyncHandler(async (req, res) => {
+  const invalid = await vaultService.getInvalidNotes();
+  res.json({ success: true, data: invalid, count: invalid.length });
 }));
 
 // ─── Param routes  (dynamic segments — must come last) ───────────────────────

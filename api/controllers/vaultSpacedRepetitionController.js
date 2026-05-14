@@ -12,25 +12,22 @@
  */
 
 const UnifiedTestService = require('../Services/unifiedTestService');
+const VaultService = require('../Services/vaultService');
 
 class VaultSpacedRepetitionController {
   constructor() {
     this.service = new UnifiedTestService();
+    this.vaultService = new VaultService();
   }
 
   // ─────────────────────────────────────────────
   // Helpers
   // ─────────────────────────────────────────────
 
-  /**
-   * Parse a compound vaultId (domain__section__stem) into parts.
-   */
-  _parseVaultId(vaultId) {
-    const parts = vaultId.split('__');
-    if (parts.length >= 3) {
-      return { domain: parts[0], section: parts[1], stem: parts.slice(2).join('__'), isCompound: true };
-    }
-    return { domain: 'general', section: 'main', stem: vaultId, isCompound: false };
+  async _getVaultCardOrThrow(id) {
+    const card = await this.vaultService.getNoteById(id);
+    if (!card) throw new Error(`Vault card not found: ${id}`);
+    return card;
   }
 
   /**
@@ -68,12 +65,12 @@ class VaultSpacedRepetitionController {
       const testData = this._validateVaultTestSubmission(req.body);
       const { vaultId, scorePercent, totalQuestions, correctAnswers, avgTimePerQuestion } = testData;
 
-      const { domain, section } = this._parseVaultId(vaultId);
+      const card = await this._getVaultCardOrThrow(vaultId);
 
       const attempt = await this.service.submitAttempt({
         vaultId,
-        domainId: domain,
-        sectionId: section,
+        domainId: card.domain,
+        sectionId: card.section,
         scorePercent,
         totalQuestions,
         correctAnswers: correctAnswers ?? Math.round((scorePercent / 100) * totalQuestions),
@@ -92,16 +89,16 @@ class VaultSpacedRepetitionController {
           vaultId,
           vaultInfo: {
             vaultId,
-            title: vaultId,
-            domain,
-            section,
-            path: vaultId,
+            title: card.title,
+            domain: card.domain,
+            section: card.section,
+            topic: card.topic,
           },
           attempt,
           spacedRepetitionResult: stats
             ? { data: { testAttempt: attempt, updatedStats: stats.spacedRepetitionStats } }
             : null,
-          hierarchyMapping: { domainId: domain, sectionId: section, materialId: vaultId },
+          hierarchyMapping: { domainId: card.domain, sectionId: card.section, materialId: vaultId },
           submissionType: testData.isResubmission ? 'resubmission' : 'new',
         },
         message: 'Vault test submitted successfully with spaced repetition tracking',
@@ -110,6 +107,9 @@ class VaultSpacedRepetitionController {
       console.error('[VaultSpacedRepetitionController] Submit vault test error:', error);
       if (error.message.includes('Missing required field')) {
         return res.status(400).json({ success: false, error: 'Invalid request data', details: error.message });
+      }
+      if (error.message.includes('Vault card not found')) {
+        return res.status(404).json({ success: false, error: error.message });
       }
       res.status(500).json({ success: false, error: 'Failed to submit vault test', details: error.message });
     }
@@ -214,9 +214,12 @@ class VaultSpacedRepetitionController {
       }
 
       this._validateVaultTestSubmission({ ...updatedTestData, vaultId });
+      const card = await this._getVaultCardOrThrow(vaultId);
 
       const resubmission = await this.service.resubmitAttempt(originalTestId, {
         vaultId,
+        domainId: card.domain,
+        sectionId: card.section,
         scorePercent: updatedTestData.scorePercent,
         totalQuestions: updatedTestData.totalQuestions,
         correctAnswers: updatedTestData.correctAnswers,

@@ -40,9 +40,12 @@ class TestModel {
         sourceNotes = testData.sourceNotes.map(note => ({
           noteId: note.id || '',
           title: note.title || 'Untitled note',
-          content: note.content || '',
+          type: note.type || '',
+          domain: note.domain || '',
           section: note.section || '',
-          filePath: note.filePath || ''
+          topic: note.topic || '',
+          source: note.source || '',
+          tags: Array.isArray(note.tags) ? note.tags : [],
         }));
       }
 

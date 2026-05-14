@@ -25,8 +25,7 @@ class PromptBuilder {
     const topic = this._getTopic(sections);
     const nameContext = testName ? `\n- Test Name: "${testName}"` : '';
 
-    // Build a structured note index so the AI can reference exact slug IDs.
-    // Format: id:"networking/dns/dns-resolver" title:"DNS resolver"
+    // Build a structured note index so the AI can reference exact vault IDs.
     const noteIndex = notes
       .map(n => `  - id:"${n.id}" title:"${n.title}"`)
       .join('\n');
@@ -60,8 +59,8 @@ CRITICAL REQUIREMENTS:
 4. Do NOT use outside knowledge or invent concepts not present in the notes.
 5. Focus on "What is...", "Why does...", "How does...", "Explain..." type questions.
 6. Each question must have a clear, concise answer based on the provided material.
-7. For "sourceNoteId" use the EXACT id value from the AVAILABLE NOTES list above
-   (e.g. "networking/dns/dns-resolver"). Never invent or paraphrase an id.
+7. For "sourceNoteId" use the EXACT id value from the AVAILABLE NOTES list above.
+   Never invent, paraphrase, or derive an id from a filename.
 8. For "sourceConcept" use the human-readable title of the same note.
 
 RESPONSE FORMAT:
@@ -74,7 +73,7 @@ Return valid JSON ONLY with this exact structure — no commentary, no markdown 
       "question": "What is [concept]?",
       "answer": "[Clear, concise answer from the material]",
       "sourceConcept": "[Note title from AVAILABLE NOTES]",
-      "sourceNoteId": "[Exact note id from AVAILABLE NOTES, e.g. networking/dns/dns-resolver]"
+      "sourceNoteId": "[Exact note id from AVAILABLE NOTES]"
     }
   ]
 }`;

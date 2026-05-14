@@ -6,7 +6,6 @@ const path = require('path');
 const EXCLUDED_ROOT_FOLDERS = new Set(['templates']);
 const TOPIC_MAP_FILE = '_index.md';
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
-const ID_FORMAT_RE = /^\d{12}$/;
 
 function parseFrontmatter(raw) {
   const match = raw.match(FRONTMATTER_RE);
@@ -20,7 +19,7 @@ function parseFrontmatter(raw) {
     const colon = line.indexOf(':');
     if (colon === -1) continue;
 
-    const key = line.slice(0, colon).trim();
+    const key = line.slice(0, colon).trim().replace(/^#+\s*/, '');
     let value = line.slice(colon + 1).trim();
     if (!key) continue;
 
@@ -53,11 +52,22 @@ function parseFrontmatter(raw) {
 }
 
 function validateCardId(id) {
-  if (!id || id.trim() === '') return { valid: false, reason: 'missing id field' };
-  if (!ID_FORMAT_RE.test(id.trim())) {
-    return { valid: false, reason: `malformed id "${id}" — expected YYYYMMDDHHmm (12 digits)` };
+  if (id === undefined || id === null || `${id}`.trim() === '') {
+    return { valid: false, reason: 'missing id field' };
   }
   return { valid: true };
+}
+
+function normalizeTags(tags) {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.map(tag => `${tag}`.trim()).filter(Boolean);
+  return `${tags}`.split(',').map(tag => tag.trim()).filter(Boolean);
+}
+
+function extractMarkdownBody(raw) {
+  return raw
+    .replace(FRONTMATTER_RE, '')
+    .replace(/^\s*(?:#\s+Content\s*\r?\n)?/i, '');
 }
 
 class VaultService {
@@ -154,7 +164,7 @@ class VaultService {
     }
 
     const meta = parseFrontmatter(content);
-    const required = ['id', 'title', 'type', 'domain', 'section', 'topic', 'created', 'updated'];
+    const required = ['id', 'title', 'type', 'domain', 'section', 'topic'];
     const missing = required.filter(field => !meta[field] || `${meta[field]}`.trim() === '');
 
     if (missing.length > 0) {
@@ -190,8 +200,7 @@ class VaultService {
       return { invalid: { filePath, fileName, reason } };
     }
 
-    const body = content.replace(FRONTMATTER_RE, '').replace(/^\r?\n/, '');
-    const links = body.match(/\[\[[^\]]+\]\]/g);
+    const body = extractMarkdownBody(content);
 
     return {
       note: {
@@ -204,12 +213,10 @@ class VaultService {
         source: meta.source,
         created: meta.created,
         updated: meta.updated,
-        tags: Array.isArray(meta.tags) ? meta.tags : undefined,
-        links: links ? links.map(link => link.slice(2, -2)) : undefined,
+        tags: normalizeTags(meta.tags),
         content: body,
         filePath,
         fileName,
-        meta,
       },
     };
   }

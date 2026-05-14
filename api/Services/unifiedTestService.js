@@ -102,8 +102,8 @@ async submitAttempt({
     if (scorePercent != null && (domainId || vaultId)) {
       try {
         const ssService = new SpacedRepetitionService(this.db);
-        const effectiveDomain   = domainId  || vaultId?.split('__')[0] || 'general';
-        const effectiveSection  = sectionId || vaultId?.split('__')[1] || 'main';
+        const effectiveDomain   = domainId  || 'general';
+        const effectiveSection  = sectionId || 'main';
         const effectiveMaterial = vaultId   || testId                  || 'unknown';
 
         const currentStats = await ssService.getCurrentHierarchyStats(
