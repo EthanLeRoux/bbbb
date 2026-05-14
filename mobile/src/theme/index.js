@@ -1,12 +1,15 @@
 export const colors = {
-  accent: '#2563eb',
-  background: '#f8fafc',
-  border: '#dbe3ef',
+  accent: '#c8f135',
+  accentMuted: 'rgba(200, 241, 53, 0.12)',
+  background: '#0e0e0f',
+  border: '#2a2a2c',
   buttonText: '#ffffff',
-  danger: '#b42318',
-  muted: '#52657a',
-  surface: '#ffffff',
-  text: '#172033',
+  danger: '#f87171',
+  muted: '#8a8a91',
+  success: '#4ade80',
+  surface: '#1a1a1c',
+  surfaceRaised: '#222226',
+  text: '#f0ede8',
 };
 
 export const spacing = {
@@ -22,4 +25,10 @@ export const typography = {
   body: 16,
   subtitle: 18,
   title: 32,
+};
+
+export const fonts = {
+  mono: 'Courier New',
+  sans: 'System',
+  serif: 'Georgia',
 };

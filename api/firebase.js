@@ -23,7 +23,7 @@ function initializeFirebase() {
 
   try {
     // Load service account key from local file
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 
+    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT || 
       path.join(__dirname, 'service-account-key.json');
 
     if (!fs.existsSync(serviceAccountPath)) {
