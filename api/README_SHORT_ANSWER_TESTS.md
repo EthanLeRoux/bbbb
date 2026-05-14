@@ -149,7 +149,15 @@ Required in `.env` file:
 ```
 # Existing variables
 MONGO_URI=mongodb://localhost:27017/benkyozk
+VAULT_SOURCE=local
 VAULT_PATH=/path/to/obsidian/vault
+
+# GitHub vault source, used when VAULT_SOURCE=github
+GITHUB_OWNER=your-github-org-or-user
+GITHUB_REPO=your-vault-repo
+GITHUB_BRANCH=main
+GITHUB_VAULT_PATH=path/in/repo
+GITHUB_TOKEN=github-token-kept-on-the-backend
 
 # New required variable
 OPENAI_API_KEY=sk-your-openai-api-key-here
@@ -375,7 +383,7 @@ Consider adding tests for:
 - Restart server
 
 **"Domain not found in vault"**
-- Check VAULT_PATH environment variable
+- Check VAULT_SOURCE and the matching vault source environment variables
 - Verify domain exists in vault structure
 - Use `/api/vault/domains` to list available domains
 

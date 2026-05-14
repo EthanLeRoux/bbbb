@@ -2,6 +2,7 @@
 
 const fs = require('fs/promises');
 const path = require('path');
+const fetch = require('node-fetch');
 
 const EXCLUDED_ROOT_FOLDERS = new Set(['templates']);
 const TOPIC_MAP_FILE = '_index.md';
@@ -102,11 +103,44 @@ function normalizeComparable(value) {
   return `${value || ''}`.trim().toLowerCase();
 }
 
+function normalizeVaultSource(value) {
+  const source = `${value || 'local'}`.trim().toLowerCase();
+  if (!['local', 'github'].includes(source)) {
+    throw new Error('VAULT_SOURCE must be either "local" or "github"');
+  }
+  return source;
+}
+
+function normalizeRepoPath(value) {
+  return `${value || ''}`.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+function joinRepoPath(...parts) {
+  return parts.map(normalizeRepoPath).filter(Boolean).join('/');
+}
+
+function getRequiredEnv(name) {
+  const value = process.env[name];
+  if (!value || value.trim() === '') throw new Error(`${name} environment variable is required`);
+  return value.trim();
+}
+
 class VaultService {
   constructor(options = {}) {
-    const vaultPath = process.env.VAULT_PATH;
-    if (!vaultPath) throw new Error('VAULT_PATH environment variable is required');
-    this.vaultPath = vaultPath;
+    this.vaultSource = normalizeVaultSource(process.env.VAULT_SOURCE);
+    if (this.vaultSource === 'local') {
+      const vaultPath = process.env.VAULT_PATH;
+      if (!vaultPath) throw new Error('VAULT_PATH environment variable is required when VAULT_SOURCE=local');
+      this.vaultPath = vaultPath;
+    } else {
+      this.github = {
+        owner: getRequiredEnv('GITHUB_OWNER'),
+        repo: getRequiredEnv('GITHUB_REPO'),
+        branch: getRequiredEnv('GITHUB_BRANCH'),
+        vaultPath: normalizeRepoPath(process.env.GITHUB_VAULT_PATH),
+        token: getRequiredEnv('GITHUB_TOKEN'),
+      };
+    }
     this._cache = null;
     this.syncFirebaseStateOnScan = options.syncFirebaseStateOnScan !== false;
   }
@@ -121,6 +155,8 @@ class VaultService {
   }
 
   async _scanKnowledge() {
+    if (this.vaultSource === 'github') return this._scanGitHubKnowledge();
+
     const structure = { domains: {}, totalNotes: 0, invalidNotes: [] };
     const seenIds = new Set();
     const domainEntries = await fs.readdir(this.vaultPath, { withFileTypes: true });
@@ -141,6 +177,128 @@ class VaultService {
     await this._syncFirebaseNoteState(structure);
 
     return structure;
+  }
+
+  async _scanGitHubKnowledge() {
+    const structure = { domains: {}, totalNotes: 0, invalidNotes: [] };
+    const seenIds = new Set();
+    const files = await this._listGitHubMarkdownFiles();
+
+    for (const file of files) {
+      const result = await this._readGitHubNote(file, seenIds);
+      const domainName = file.domainName;
+      const sectionName = file.sectionName;
+
+      if (!structure.domains[domainName]) {
+        structure.domains[domainName] = { sections: {}, noteCount: 0 };
+      }
+      if (!structure.domains[domainName].sections[sectionName]) {
+        structure.domains[domainName].sections[sectionName] = { notes: [] };
+      }
+
+      if (result.note) {
+        structure.domains[domainName].sections[sectionName].notes.push(result.note);
+        structure.domains[domainName].noteCount += 1;
+        structure.totalNotes += 1;
+      } else if (result.invalid) {
+        structure.invalidNotes.push(result.invalid);
+      }
+    }
+
+    await this._syncFirebaseNoteState(structure);
+
+    return structure;
+  }
+
+  async _githubFetch(url) {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${this.github.token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'bbbb-vault-service',
+      },
+    });
+
+    if (!response.ok) {
+      const message = response.status === 404
+        ? 'GitHub vault source not found. Check GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH, and GITHUB_VAULT_PATH.'
+        : `GitHub vault request failed with status ${response.status}`;
+      throw new Error(message);
+    }
+
+    return response.json();
+  }
+
+  async _getGitHubTreeSha() {
+    const encodedBranch = encodeURIComponent(this.github.branch);
+    const url = `https://api.github.com/repos/${encodeURIComponent(this.github.owner)}/${encodeURIComponent(this.github.repo)}/commits/${encodedBranch}`;
+    const commit = await this._githubFetch(url);
+    return commit.commit?.tree?.sha;
+  }
+
+  async _listGitHubMarkdownFiles() {
+    const treeSha = await this._getGitHubTreeSha();
+    if (!treeSha) throw new Error('GitHub branch ref did not include a tree SHA');
+
+    const url = `https://api.github.com/repos/${encodeURIComponent(this.github.owner)}/${encodeURIComponent(this.github.repo)}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`;
+    const data = await this._githubFetch(url);
+    if (data.truncated) {
+      throw new Error('GitHub vault tree is too large for a single recursive scan');
+    }
+
+    const basePath = this.github.vaultPath;
+    const basePrefix = basePath ? `${basePath}/` : '';
+
+    return (data.tree || [])
+      .filter(item => item.type === 'blob' && item.path.endsWith('.md'))
+      .filter(item => !basePath || item.path.startsWith(basePrefix))
+      .map(item => {
+        const relativePath = basePath ? item.path.slice(basePrefix.length) : item.path;
+        const parts = relativePath.split('/').filter(Boolean);
+        if (parts.length < 3 || parts[parts.length - 1] === TOPIC_MAP_FILE) return null;
+        if (parts.length > 4) return null;
+        if (parts[0].startsWith('.') || EXCLUDED_ROOT_FOLDERS.has(parts[0].toLowerCase())) return null;
+
+        const fileName = parts[parts.length - 1];
+        const domainName = parts[0];
+        const sectionName = parts[1];
+        const topicName = parts.length > 3 ? parts[2] : null;
+
+        return {
+          blobSha: item.sha,
+          repoPath: item.path,
+          filePath: `github:${this.github.owner}/${this.github.repo}/${joinRepoPath(this.github.vaultPath, relativePath)}`,
+          fileName,
+          domainName,
+          sectionName,
+          topicName,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  async _readGitHubNote(file, seenIds) {
+    let content;
+
+    try {
+      const url = `https://api.github.com/repos/${encodeURIComponent(this.github.owner)}/${encodeURIComponent(this.github.repo)}/git/blobs/${encodeURIComponent(file.blobSha)}`;
+      const blob = await this._githubFetch(url);
+      content = Buffer.from(blob.content || '', blob.encoding || 'base64').toString('utf8');
+    } catch (err) {
+      console.error(`[VaultService] Could not read "${file.filePath}": ${err.message}`);
+      return {};
+    }
+
+    return this._parseNoteContent({
+      content,
+      filePath: file.filePath,
+      fileName: file.fileName,
+      domainName: file.domainName,
+      sectionName: file.sectionName,
+      topicName: file.topicName,
+      seenIds,
+    });
   }
 
   async _syncFirebaseNoteState(structure) {
@@ -232,6 +390,18 @@ class VaultService {
       return {};
     }
 
+    return this._parseNoteContent({
+      content,
+      filePath,
+      fileName,
+      domainName,
+      sectionName,
+      topicName,
+      seenIds,
+    });
+  }
+
+  _parseNoteContent({ content, filePath, fileName, domainName, sectionName, topicName, seenIds }) {
     const meta = parseMetadata(content);
     const derivedDomain = meta.domain || domainName;
     const derivedSection = meta.section || sectionName;

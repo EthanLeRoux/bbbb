@@ -22,7 +22,7 @@ const checkVaultService = (req, res, next) => {
   if (!vaultService) {
     return res.status(503).json({
       success: false,
-      error: 'Vault service unavailable. Check VAULT_PATH environment variable.',
+      error: 'Vault service unavailable. Check VAULT_SOURCE and vault source environment variables.',
     });
   }
   next();
@@ -32,7 +32,7 @@ const checkVaultCardStateService = (req, res, next) => {
   if (!vaultCardStateService) {
     return res.status(503).json({
       success: false,
-      error: 'Vault card state service unavailable. Check VAULT_PATH and Firebase configuration.',
+      error: 'Vault card state service unavailable. Check VAULT_SOURCE, vault source environment variables, and Firebase configuration.',
     });
   }
   next();
