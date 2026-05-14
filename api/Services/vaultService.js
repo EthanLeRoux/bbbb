@@ -103,11 +103,12 @@ function normalizeComparable(value) {
 }
 
 class VaultService {
-  constructor() {
+  constructor(options = {}) {
     const vaultPath = process.env.VAULT_PATH;
     if (!vaultPath) throw new Error('VAULT_PATH environment variable is required');
     this.vaultPath = vaultPath;
     this._cache = null;
+    this.syncFirebaseStateOnScan = options.syncFirebaseStateOnScan !== false;
   }
 
   invalidateCache() {
@@ -137,7 +138,33 @@ class VaultService {
       structure.invalidNotes.push(...invalidNotes);
     }
 
+    await this._syncFirebaseNoteState(structure);
+
     return structure;
+  }
+
+  async _syncFirebaseNoteState(structure) {
+    if (!this.syncFirebaseStateOnScan) return;
+
+    try {
+      const VaultCardStateService = require('./vaultCardStateService');
+      const cards = [];
+
+      for (const domain of Object.values(structure.domains)) {
+        for (const section of Object.values(domain.sections)) {
+          cards.push(...section.notes);
+        }
+      }
+
+      const result = await VaultCardStateService.syncCards(cards, structure.invalidNotes);
+      if (result.created || result.updated || result.errors.length) {
+        console.log(
+          `[VaultService] Synced Firebase note state: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged, ${result.errors.length} errors`
+        );
+      }
+    } catch (error) {
+      console.error(`[VaultService] Failed to sync Firebase note state: ${error.message}`);
+    }
   }
 
   async _scanDomain(domainPath, domainName, seenIds) {

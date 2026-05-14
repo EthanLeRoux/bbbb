@@ -40,11 +40,12 @@ class VaultCardStateService {
   constructor() {
     this.db = getFirestore();
     this.cardStatesCollection = this.db.collection(COLLECTION_CARD_STATES);
-    this.vaultService = new VaultService();
+    this.vaultService = new VaultService({ syncFirebaseStateOnScan: false });
   }
 
-  async syncVaultCards() {
-    const cards = await this.vaultService.getAllNotes();
+  static async syncCards(cards, invalidNotes = []) {
+    const db = getFirestore();
+    const cardStatesCollection = db.collection(COLLECTION_CARD_STATES);
     const result = {
       scanned: cards.length,
       created: 0,
@@ -55,7 +56,7 @@ class VaultCardStateService {
 
     for (const card of cards) {
       try {
-        const ref = this.cardStatesCollection.doc(card.id);
+        const ref = cardStatesCollection.doc(card.id);
         const snap = await ref.get();
         const metadata = cardMetadataFromVaultCard(card);
 
@@ -82,10 +83,15 @@ class VaultCardStateService {
       }
     }
 
-    const invalidNotes = await this.vaultService.getInvalidNotes();
     result.invalid = invalidNotes;
     result.invalidCount = invalidNotes.length;
     return result;
+  }
+
+  async syncVaultCards() {
+    const cards = await this.vaultService.getAllNotes();
+    const invalidNotes = await this.vaultService.getInvalidNotes();
+    return VaultCardStateService.syncCards(cards, invalidNotes);
   }
 
   async getCardState(id) {
