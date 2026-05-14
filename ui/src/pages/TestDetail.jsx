@@ -171,6 +171,8 @@ export default function TestDetail() {
       console.error('Failed to start attempt:', error);
     },
   });
+  const isStartingAttempt = startAttemptMutation.isPending || startAttemptMutation.isLoading;
+  const isDeletingTest = deleteMutation.isPending || deleteMutation.isLoading;
 
 
   const handleDelete = () => {
@@ -311,34 +313,34 @@ export default function TestDetail() {
       <div style={styles.actions}>
         <button
           onClick={handleStartAttempt}
-          disabled={startAttemptMutation.isLoading}
+          disabled={isStartingAttempt}
           style={{
             ...styles.startButton,
-            ...(startAttemptMutation.isLoading ? styles.startButtonDisabled : {}),
+            ...(isStartingAttempt ? styles.startButtonDisabled : {}),
           }}
         >
-          {startAttemptMutation.isLoading ? 'Starting...' : LABELS.tests.startAttempt}
+          {isStartingAttempt ? 'Starting...' : LABELS.tests.startAttempt}
         </button>
 
         <button
           onClick={handleDelete}
-          disabled={deleteMutation.isLoading}
+          disabled={isDeletingTest}
           style={{
             ...styles.deleteButton,
-            ...(deleteMutation.isLoading ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+            ...(isDeletingTest ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
           }}
           onMouseEnter={(e) => {
-            if (!deleteMutation.isLoading) e.currentTarget.style.backgroundColor = COLORS.error;
+            if (!isDeletingTest) e.currentTarget.style.backgroundColor = COLORS.error;
             e.currentTarget.style.color = COLORS.bg;
           }}
           onMouseLeave={(e) => {
-            if (!deleteMutation.isLoading) {
+            if (!isDeletingTest) {
               e.currentTarget.style.backgroundColor = 'transparent';
               e.currentTarget.style.color = COLORS.error;
             }
           }}
         >
-          {deleteMutation.isLoading ? 'Deleting...' : LABELS.tests.deleteBtn}
+          {isDeletingTest ? 'Deleting...' : LABELS.tests.deleteBtn}
         </button>
       </div>
     </div>

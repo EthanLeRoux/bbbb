@@ -247,6 +247,7 @@ export default function ResubmitButton({ vaultId, testHistory, onResubmitSuccess
       }
     },
   });
+  const isResubmitting = resubmitMutation.isPending || resubmitMutation.isLoading;
 
   const originalTests = testHistory?.filter(test => !test.isResubmission) || [];
 
@@ -433,13 +434,13 @@ export default function ResubmitButton({ vaultId, testHistory, onResubmitSuccess
                 <div style={styles.formActions}>
                   <button 
                     type="submit" 
-                    disabled={resubmitMutation.isLoading}
+                    disabled={isResubmitting}
                     style={{
                       ...styles.submitButton,
-                      ...(resubmitMutation.isLoading ? styles.submitButtonDisabled : {}),
+                      ...(isResubmitting ? styles.submitButtonDisabled : {}),
                     }}
                   >
-                    {resubmitMutation.isLoading ? 'Submitting...' : 'Submit Resubmission'}
+                    {isResubmitting ? 'Submitting...' : 'Submit Resubmission'}
                   </button>
                   <button 
                     type="button" 

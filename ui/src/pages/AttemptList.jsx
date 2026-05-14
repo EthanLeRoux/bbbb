@@ -185,6 +185,23 @@ function formatDate(dateString) {
   });
 }
 
+function formatDateTime(dateString) {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '-';
+  return {
+    date: formatDate(dateString),
+    time: d.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    }),
+  };
+}
+
+function getAttemptSubmittedAt(attempt) {
+  return attempt.submittedAt || attempt.SubmittedAt || attempt.completedAt || attempt.updatedAt || attempt.createdAt;
+}
+
 function formatTestId(testId) {
   if (!testId) return 'Unknown';
   return testId.length > 8 ? `${testId.substring(0, 8)}...` : testId;
@@ -268,7 +285,7 @@ export default function AttemptList() {
               <div style={styles.tableHeaderCell}>AI Status</div>
               <div style={styles.tableHeaderCell}>Questions</div>
               <div style={{ flex: '0 0 120px' }}>Action</div>
-              <div style={styles.tableHeaderCell}>Date</div>
+              <div style={styles.tableHeaderCell}>Submitted</div>
             </div>
             
             {attempts.map((attempt) => {
@@ -277,6 +294,7 @@ export default function AttemptList() {
               const needsRemarking = !hasAIScoring && attempt.status === 'completed' && !isVaultAttempt;
               const hasBeenRemarked = (attempt.remarkCount || 0) > 0;
               const isRemarking = remarkingIds.has(attempt.id);
+              const submittedAt = formatDateTime(getAttemptSubmittedAt(attempt));
 
               return (
                 <div
@@ -375,7 +393,14 @@ export default function AttemptList() {
                     )}
                   </div>
                   <div style={styles.tableCell}>
-                    {formatDate(attempt.submittedAt || attempt.createdAt)}
+                    <span>
+                      {submittedAt.date || submittedAt}
+                      {submittedAt.time && (
+                        <span style={{ display: 'block', color: COLORS.muted, fontSize: SIZE.xs }}>
+                          {submittedAt.time}
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </div>
               );

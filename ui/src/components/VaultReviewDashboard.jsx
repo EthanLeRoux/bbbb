@@ -26,6 +26,57 @@ function isOverdue(dateString) {
   return new Date(dateString) < new Date();
 }
 
+function getScheduleDate(item) {
+  return item.nextReviewAt || item.reviewDate || item.dueAt || item.updatedAt || item.createdAt || new Date().toISOString();
+}
+
+function formatDayHeading(dateString) {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Unscheduled';
+
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (sameDay(date, today)) return 'Today';
+  if (sameDay(date, tomorrow)) return 'Tomorrow';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function groupByScheduleDay(items) {
+  const groups = new Map();
+
+  items.forEach(item => {
+    const date = new Date(getScheduleDate(item));
+    const key = isNaN(date.getTime())
+      ? 'unscheduled'
+      : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const group = groups.get(key) || {
+      key,
+      label: key === 'unscheduled' ? 'Unscheduled' : formatDayHeading(date),
+      date,
+      items: [],
+    };
+    group.items.push(item);
+    groups.set(key, group);
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    if (a.key === 'unscheduled') return 1;
+    if (b.key === 'unscheduled') return -1;
+    return a.date - b.date;
+  });
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = {
@@ -110,6 +161,35 @@ const s = {
     flexDirection: 'column',
     gap: SPACE.sm,
   },
+  calendar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: SPACE.md,
+  },
+  dayGroup: {
+    display: 'grid',
+    gridTemplateColumns: '112px 1fr',
+    gap: SPACE.md,
+    paddingBottom: SPACE.md,
+    borderBottom: `1px solid ${COLORS.border}`,
+  },
+  dayLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.sm,
+    color: COLORS.text,
+    alignSelf: 'start',
+  },
+  dayCount: {
+    display: 'block',
+    color: COLORS.muted,
+    fontSize: SIZE.xs,
+    marginTop: 2,
+  },
+  timelineList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: SPACE.sm,
+  },
   card: {
     backgroundColor: COLORS.bg,
     border: `1px solid ${COLORS.border}`,
@@ -170,6 +250,12 @@ const s = {
     color: COLORS.muted,
     textAlign: 'right',
   },
+  timeText: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.xs,
+    color: COLORS.text,
+    textAlign: 'right',
+  },
   emptyState: {
     textAlign: 'center',
     color: COLORS.muted,
@@ -199,6 +285,10 @@ function QueueCard({ item, rank }) {
   const title = item.vaultInfo?.title || item.entityId || 'Unknown';
   const domain = item.vaultInfo?.domain || item.domainId || '';
   const section = item.vaultInfo?.section || item.sectionId || '';
+  const reviewDate = new Date(getScheduleDate(item));
+  const reviewTime = isNaN(reviewDate.getTime())
+    ? ''
+    : reviewDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const domainLabel = [domain, section].filter(Boolean).join(' › ');
 
   return (
@@ -219,6 +309,7 @@ function QueueCard({ item, rank }) {
       </div>
 
       <div style={s.cardRight}>
+        {reviewTime && <div style={s.timeText}>{reviewTime}</div>}
         <span style={{
           ...s.urgencyBadge,
           backgroundColor: urgency.bg,
@@ -235,6 +326,32 @@ function QueueCard({ item, rank }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+
+function ScheduleCalendar({ title, items }) {
+  if (!items.length) return null;
+  const groups = groupByScheduleDay(items);
+
+  return (
+    <div>
+      <h3 style={s.sectionTitle}>{title} ({items.length})</h3>
+      <div style={s.calendar}>
+        {groups.map(group => (
+          <div key={group.key} style={s.dayGroup}>
+            <div style={s.dayLabel}>
+              {group.label}
+              <span style={s.dayCount}>{group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div style={s.timelineList}>
+              {group.items.map((item, i) => (
+                <QueueCard key={item.id || `${group.key}-${i}`} item={item} rank={i + 1} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function VaultReviewDashboard() {
   const [timeRange, setTimeRange] = useState('week');
@@ -418,29 +535,8 @@ export default function VaultReviewDashboard() {
       {/* Notes due for review (note-level SR entities) */}
       <NotesReviewDue />
 
-      {/* Due Reviews */}
-      {dueCount > 0 && (
-        <div>
-          <h3 style={s.sectionTitle}>Due Now ({dueCount})</h3>
-          <div style={s.queueList}>
-            {dueItems.map((item, i) => (
-              <QueueCard key={item.id} item={item} rank={i + 1} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Upcoming Reviews */}
-      {upcomingCount > 0 && (
-        <div>
-          <h3 style={s.sectionTitle}>Upcoming ({upcomingCount})</h3>
-          <div style={s.queueList}>
-            {upcomingItems.map((item, i) => (
-              <QueueCard key={item.id} item={item} rank={i + 1} />
-            ))}
-          </div>
-        </div>
-      )}
+      <ScheduleCalendar title="Due Now" items={dueItems} />
+      <ScheduleCalendar title="Upcoming" items={upcomingItems} />
 
       {/* Empty State */}
       {dueCount === 0 && upcomingCount === 0 && (

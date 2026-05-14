@@ -114,12 +114,44 @@ const styles = {
     opacity: 0.5,
     cursor: 'not-allowed',
   },
+  generationStatus: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    backgroundColor: COLORS.surface,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    padding: SPACE.md,
+    color: COLORS.text,
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.sm,
+    marginBottom: SPACE.md,
+  },
+  spinner: {
+    width: 16,
+    height: 16,
+    border: `2px solid ${COLORS.border}`,
+    borderTopColor: COLORS.accent,
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+    flex: '0 0 auto',
+  },
   errorContainer: {
     backgroundColor: COLORS.surface,
     border: `1px solid ${COLORS.error}`,
     borderRadius: 8,
     padding: SPACE.md,
     color: COLORS.error,
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.sm,
+    marginBottom: SPACE.md,
+  },
+  successContainer: {
+    backgroundColor: COLORS.surface,
+    border: `1px solid ${COLORS.success}`,
+    borderRadius: 8,
+    padding: SPACE.md,
+    color: COLORS.success,
     fontFamily: FONTS.mono,
     fontSize: SIZE.sm,
     marginBottom: SPACE.md,
@@ -175,6 +207,8 @@ export default function GenerateTest() {
       navigate(`/tests/${data.id}`);
     },
   });
+  const isGenerating = mutation.isPending || mutation.isLoading;
+  const generationError = mutation.error?.message || '';
 
   const handleDomainChange = (e) => {
     setFormData({
@@ -275,9 +309,36 @@ export default function GenerateTest() {
 
   return (
     <div style={styles.container}>
+      <style>
+        {`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+
       <h1 style={styles.title}>{LABELS.generate.title}</h1>
       
       <form onSubmit={handleSubmit}>
+        {isGenerating && (
+          <div style={styles.generationStatus} role="status" aria-live="polite">
+            <span style={styles.spinner} />
+            <span>Generating your test with AI. This can take a moment...</span>
+          </div>
+        )}
+
+        {mutation.isSuccess && !isGenerating && (
+          <div style={styles.successContainer} role="status" aria-live="polite">
+            Test generated. Opening it now...
+          </div>
+        )}
+
+        {mutation.isError && !isGenerating && (
+          <div style={styles.errorContainer} role="alert">
+            {generationError || 'Failed to generate test. Please try again.'}
+          </div>
+        )}
+
         <div style={styles.formGroup}>
           <label style={styles.label}>Test Name (Optional)</label>
           <input
@@ -423,13 +484,13 @@ export default function GenerateTest() {
 
         <button
           type="submit"
-          disabled={!isFormValid || mutation.isLoading}
+          disabled={!isFormValid || isGenerating}
           style={{
             ...styles.submitButton,
-            ...(mutation.isLoading || !isFormValid ? styles.submitButtonDisabled : {}),
+            ...(isGenerating || !isFormValid ? styles.submitButtonDisabled : {}),
           }}
         >
-          {mutation.isLoading ? LABELS.generate.generating : LABELS.generate.submit}
+          {isGenerating ? LABELS.generate.generating : LABELS.generate.submit}
         </button>
       </form>
     </div>

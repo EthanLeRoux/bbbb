@@ -46,22 +46,6 @@ class AttemptService {
         vaultId: test.vaultId || null
       });
 
-      // Mirror the in-progress doc in the unified collection so it can be
-      // updated by submitAttempt() and queryable for SR scheduling.
-      try {
-        const unified = await this.unifiedService.startAttempt({
-          testId,
-          vaultId: test.vaultId || null,
-          domainId: test.domain || null,
-          sectionId: test.section || null,
-        });
-        // Store the unified id on the legacy attempt so we can reference it later
-        attempt._unifiedId = unified.id;
-      } catch (unifiedErr) {
-        // Non-fatal: unified write failed, log and continue
-        console.error('[AttemptService] Unified start write failed (non-fatal):', unifiedErr.message);
-      }
-
       console.log(`[AttemptService] Started attempt with ID: ${attempt.id}`);
       return attempt;
     } catch (error) {
@@ -151,9 +135,9 @@ class AttemptService {
 
       console.log(`[AttemptService] Submitted attempt: ${attemptId}, Score: ${scoringResults.score}`);
 
-      // Mirror the completed attempt into the unified collection for SR scheduling.
-      // We look up the unified doc by attemptId stored on the legacy attempt, or
-      // fall back to creating a new completed doc (handles pre-migration attempts).
+      // Add unified fields to the same attempt document and trigger SR scheduling.
+      // AttemptModel and UnifiedTestService both use the "attempts" collection, so
+      // this must update by the existing attempt id instead of creating a mirror doc.
       try {
         const totalQuestions = scoringResults.totalQuestions || 0;
         const correctCount = scoringResults.correctCount || 0;
@@ -162,7 +146,7 @@ class AttemptService {
           : 0;
 
         await this.unifiedService.submitAttempt({
-          attemptId: attempt._unifiedId || null, // update if we have it, create otherwise
+          attemptId: attempt.id,
           testId: attempt.testId,
           vaultId: attempt.vaultId || null,
           domainId: attempt.domain || null,

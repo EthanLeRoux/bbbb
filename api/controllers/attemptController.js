@@ -110,17 +110,6 @@ class AttemptController {
       const Test = require('../models/Test');
       const test = await Test.findById(testId);
 
-      // Also update unified attempt with domain/section info for spaced repetition
-      try {
-        await this.unifiedService.updateAttemptWithDomainInfo(attempt.id, {
-          domainId: test?.domain || null,
-          sectionId: test?.section || null,
-          materialId: testId
-        });
-      } catch (unifiedErr) {
-        console.error('[AttemptController] Unified attempt domain info update failed (non-fatal):', unifiedErr.message);
-      }
-
       res.status(200).json({
         success: true,
         data: {

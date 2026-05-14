@@ -172,6 +172,7 @@ export default function VaultTestComponent({ vaultId, vaultTitle }) {
       }
     },
   });
+  const isSubmitting = submitMutation.isPending || submitMutation.isLoading;
 
   const handleInputChange = (field, value) => {
     const numValue = field === 'scorePercent' || field === 'totalQuestions' || 
@@ -421,13 +422,13 @@ export default function VaultTestComponent({ vaultId, vaultTitle }) {
         
         <button 
           type="submit" 
-          disabled={submitMutation.isLoading}
+          disabled={isSubmitting}
           style={{
             ...styles.submitButton,
-            ...(submitMutation.isLoading ? styles.submitButtonDisabled : {}),
+            ...(isSubmitting ? styles.submitButtonDisabled : {}),
           }}
         >
-          {submitMutation.isLoading ? 'Submitting...' : 'Submit Test'}
+          {isSubmitting ? 'Submitting...' : 'Submit Test'}
         </button>
         
         {submitMutation.error && (

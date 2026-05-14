@@ -7,7 +7,14 @@ async function request(path, options = {}) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || res.statusText);
+    let message = text || res.statusText;
+    try {
+      const body = JSON.parse(text);
+      message = body.error || body.message || message;
+    } catch {
+      // Keep the raw response text when the API did not return JSON.
+    }
+    throw new Error(message);
   }
   const json = await res.json();
   return json.data ?? json;

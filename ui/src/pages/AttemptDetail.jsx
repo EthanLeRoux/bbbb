@@ -288,6 +288,21 @@ function formatDate(dateString) {
   });
 }
 
+function formatDateTime(dateString) {
+  if (!dateString) return '-';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '-';
+  const time = d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${formatDate(dateString)}, ${time}`;
+}
+
+function getAttemptSubmittedAt(attempt) {
+  return attempt?.submittedAt || attempt?.SubmittedAt || attempt?.completedAt || attempt?.updatedAt || attempt?.createdAt;
+}
+
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -522,6 +537,8 @@ export default function AttemptDetail() {
       console.error('Error details:', error.message);
     },
   });
+  const isSubmittingAttempt = submitMutation.isPending || submitMutation.isLoading;
+  const isRemarkingAttempt = remarkMutation.isPending || remarkMutation.isLoading;
 
   // Timer effect for active question
   useEffect(() => {
@@ -580,6 +597,7 @@ export default function AttemptDetail() {
   const scoreImprovement = attempt?.isResubmission && attempt?.originalScore != null
     ? (attempt.scorePercent - attempt.originalScore)
     : null;
+  const submittedAt = getAttemptSubmittedAt(attempt);
 
   if (error) {
     return (
@@ -655,6 +673,10 @@ export default function AttemptDetail() {
                 <div style={styles.testInfoValue}>{attempt.testSection}</div>
               </div>
             )}
+            <div style={styles.testInfoRow}>
+              <div style={styles.testInfoLabel}>Started:</div>
+              <div style={styles.testInfoValue}>{formatDateTime(attempt.createdAt)}</div>
+            </div>
           </div>
         </div>
 
@@ -681,13 +703,13 @@ export default function AttemptDetail() {
 
         <button
           onClick={handleSubmit}
-          disabled={submitMutation.isLoading}
+          disabled={isSubmittingAttempt}
           style={{
             ...styles.submitButton,
-            ...(submitMutation.isLoading ? styles.submitButtonDisabled : {}),
+            ...(isSubmittingAttempt ? styles.submitButtonDisabled : {}),
           }}
         >
-          {submitMutation.isLoading ? LABELS.attempts.submitting : LABELS.attempts.submit}
+          {isSubmittingAttempt ? LABELS.attempts.submitting : LABELS.attempts.submit}
         </button>
       </div>
     );
@@ -726,6 +748,10 @@ export default function AttemptDetail() {
               <div style={styles.testInfoValue}>{attempt.testSection}</div>
             </div>
           )}
+          <div style={styles.testInfoRow}>
+            <div style={styles.testInfoLabel}>Submitted:</div>
+            <div style={styles.testInfoValue}>{formatDateTime(submittedAt)}</div>
+          </div>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.md }}>
@@ -745,7 +771,7 @@ export default function AttemptDetail() {
             <RemarkButton
               attemptId={id}
               onRemark={handleRemark}
-              isLoading={remarkMutation.isLoading}
+              isLoading={isRemarkingAttempt}
               hasBeenRemarked={hasBeenRemarked}
               scoreImprovement={scoreImprovement}
               remarkCount={attempt.remarkCount}
@@ -753,7 +779,7 @@ export default function AttemptDetail() {
           )}
         </div>
         <div style={styles.date}>
-          {formatDate(attempt.submittedAt || attempt.updatedAt)}
+          Submitted {formatDateTime(submittedAt)}
           {hasBeenRemarked && (
             <span style={{ marginLeft: SPACE.sm, color: COLORS.muted }}>
               (Re-marked {attempt.remarkCount} time{attempt.remarkCount > 1 ? 's' : ''})

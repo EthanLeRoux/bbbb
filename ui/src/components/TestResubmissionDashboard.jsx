@@ -468,6 +468,7 @@ export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDo
       console.error('Failed to resubmit test:', error);
     },
   });
+  const isResubmitting = resubmitMutation.isPending || resubmitMutation.isLoading;
 
   const handleResubmitTest = (test) => {
     setSelectedTest(test);
@@ -792,13 +793,13 @@ export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDo
           <div style={styles.formActions}>
             <button 
               type="submit" 
-              disabled={resubmitMutation.isLoading}
+              disabled={isResubmitting}
               style={{
                 ...styles.submitButton,
-                ...(resubmitMutation.isLoading ? styles.submitButtonDisabled : {}),
+                ...(isResubmitting ? styles.submitButtonDisabled : {}),
               }}
             >
-              {resubmitMutation.isLoading ? 'Submitting...' : 'Submit Resubmission'}
+              {isResubmitting ? 'Submitting...' : 'Submit Resubmission'}
             </button>
             <button 
               type="button" 

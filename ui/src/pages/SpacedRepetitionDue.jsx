@@ -39,6 +39,29 @@ const styles = {
     flexDirection: 'column',
     gap: SPACE.sm,
   },
+  calendar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: SPACE.md,
+  },
+  dayGroup: {
+    display: 'grid',
+    gridTemplateColumns: '112px 1fr',
+    gap: SPACE.md,
+    paddingBottom: SPACE.md,
+    borderBottom: `1px solid ${COLORS.border}`,
+  },
+  dayLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.sm,
+    color: COLORS.text,
+  },
+  dayCount: {
+    display: 'block',
+    color: COLORS.muted,
+    fontSize: SIZE.xs,
+    marginTop: 2,
+  },
   dueCard: {
     backgroundColor: COLORS.surface,
     border: `1px solid ${COLORS.border}`,
@@ -169,6 +192,57 @@ function formatDate(dateString) {
   });
 }
 
+function getScheduleDate(item) {
+  return item.nextReviewAt || item.reviewDate || item.dueAt || item.updatedAt || item.createdAt || new Date().toISOString();
+}
+
+function formatDayHeading(dateString) {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Unscheduled';
+
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (sameDay(date, today)) return 'Today';
+  if (sameDay(date, tomorrow)) return 'Tomorrow';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function groupByScheduleDay(items) {
+  const groups = new Map();
+
+  items.forEach(item => {
+    const date = new Date(getScheduleDate(item));
+    const key = isNaN(date.getTime())
+      ? 'unscheduled'
+      : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const group = groups.get(key) || {
+      key,
+      label: key === 'unscheduled' ? 'Unscheduled' : formatDayHeading(date),
+      date,
+      items: [],
+    };
+    group.items.push(item);
+    groups.set(key, group);
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    if (a.key === 'unscheduled') return 1;
+    if (b.key === 'unscheduled') return -1;
+    return a.date - b.date;
+  });
+}
+
 function getPriorityStyle(priorityScore) {
   if (priorityScore >= 75) return { container: styles.priorityCritical, label: 'CRITICAL' };
   if (priorityScore >= 50) return { container: styles.priorityHigh, label: 'HIGH' };
@@ -192,7 +266,7 @@ function DueItemCard({ item, entityType }) {
         <span style={styles.entityPath}>
           {formatEntityPath(entityType, item.entityId)}
         </span>
-        <span style={[styles.priorityBadge, priorityStyle.container]}>
+        <span style={{ ...styles.priorityBadge, ...priorityStyle.container }}>
           {priorityStyle.label}
         </span>
       </div>
@@ -228,6 +302,32 @@ function DueItemCard({ item, entityType }) {
             Next: {new Date(item.nextReviewAt).toLocaleDateString()}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CalendarSection({ title, items }) {
+  if (!items.length) return null;
+  const groups = groupByScheduleDay(items);
+
+  return (
+    <div style={styles.section}>
+      <h2 style={styles.sectionTitle}>{title}</h2>
+      <div style={styles.calendar}>
+        {groups.map(group => (
+          <div key={group.key} style={styles.dayGroup}>
+            <div style={styles.dayLabel}>
+              {group.label}
+              <span style={styles.dayCount}>{group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div style={styles.dueCardsContainer}>
+              {group.items.map(item => (
+                <DueItemCard key={item.id} item={item} entityType={item.entityType} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -306,6 +406,8 @@ export default function SpacedRepetitionDue() {
         </div>
       ) : (
         <>
+          <CalendarSection title="Due for Review" items={dueItems} />
+          {false && (
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>⏰ Due for Review</h2>
             <div style={styles.dueCardsContainer}>
@@ -314,10 +416,16 @@ export default function SpacedRepetitionDue() {
               ))}
             </div>
           </div>
+          )}
         </>
       )}
 
       {upcomingItems.length > 0 && (
+        <>
+        <div style={styles.upcomingContainer}>
+          <CalendarSection title="Upcoming Reviews" items={upcomingItems.slice(0, 10)} />
+        </div>
+        {false && (
         <div style={styles.section}>
           <h2 style={{ ...styles.sectionTitle, ...styles.upcomingContainer }}>📅 Upcoming Reviews</h2>
           <div style={styles.dueCardsContainer}>
@@ -326,6 +434,8 @@ export default function SpacedRepetitionDue() {
             ))}
           </div>
         </div>
+        )}
+        </>
       )}
     </div>
   );
