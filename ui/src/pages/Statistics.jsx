@@ -1,8 +1,19 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAttempts } from '../api/attempts';
 import Skeleton from '../components/Skeleton';
+import {
+  ChartGrid,
+  WeakestTopicsTrend,
+  RecommendedFocusAreas,
+  StudyStreakHeatmap,
+  MistakeCategoryBreakdown,
+  KnowledgeDecayAnalytics,
+} from '../components/charts';
+import { buildLearningInsightPipeline } from '../utils/learningInsightPipeline';
 import { COLORS, FONTS, SPACE, SIZE, LABELS } from '../constants';
+
+/* ─── Styles ─────────────────────────────────────────────────────────────── */
 
 const styles = {
   container: {
@@ -36,11 +47,7 @@ const styles = {
     borderRadius: 8,
     padding: SPACE.md,
   },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: SPACE.xs,
-  },
+  field: { display: 'flex', flexDirection: 'column', gap: SPACE.xs },
   label: {
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
@@ -70,93 +77,61 @@ const styles = {
     borderRadius: 8,
     padding: SPACE.md,
   },
-  summaryLabel: {
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.xs,
-    color: COLORS.muted,
-    marginBottom: SPACE.xs,
-  },
-  summaryValue: {
-    fontFamily: FONTS.serif,
-    fontSize: SIZE.xl,
-    color: COLORS.text,
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))',
-    gap: SPACE.lg,
-  },
-  panel: {
+  summaryLabel: { fontFamily: FONTS.mono, fontSize: SIZE.xs, color: COLORS.muted, marginBottom: SPACE.xs },
+  summaryValue: { fontFamily: FONTS.serif, fontSize: SIZE.xl, color: COLORS.text },
+  insightPanel: {
     backgroundColor: COLORS.surface,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 8,
     padding: SPACE.md,
-    minHeight: 360,
-    overflow: 'hidden',
-    transition: 'transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
+    gap: SPACE.lg,
   },
-  panelCollapsed: {
-    minHeight: 0,
-  },
-  panelWide: {
-    gridColumn: '1 / -1',
-  },
-  panelHeaderRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: SPACE.md,
-    marginBottom: SPACE.md,
-  },
-  panelTitleBlock: {
-    minWidth: 0,
-  },
-  panelTitle: {
+  insightTitle: {
     margin: 0,
-    marginBottom: SPACE.xs,
     fontFamily: FONTS.serif,
-    fontSize: SIZE.xl,
+    fontSize: SIZE.lg,
     color: COLORS.text,
   },
-  panelActions: {
-    display: 'flex',
-    gap: SPACE.xs,
-    flexShrink: 0,
-  },
-  panelButton: {
-    backgroundColor: COLORS.bg,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-    color: COLORS.text,
-    cursor: 'pointer',
+  insightText: {
     fontFamily: FONTS.mono,
-    fontSize: SIZE.xs,
-    padding: `${SPACE.xs}px ${SPACE.sm}px`,
+    fontSize: SIZE.sm,
+    color: COLORS.text,
+    lineHeight: 1.55,
   },
-  panelIconButton: {
-    width: 32,
-    height: 30,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: SIZE.md,
-    lineHeight: 1,
-    padding: 0,
-  },
-  panelPurpose: {
+  insightMuted: {
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
     color: COLORS.muted,
+    lineHeight: 1.45,
   },
-  chartClickTarget: {
-    cursor: 'zoom-in',
-    borderRadius: 6,
-    outline: 'none',
+  insightList: {
+    margin: 0,
+    paddingLeft: SPACE.md,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: SPACE.sm,
   },
-  chartWrap: {
-    width: '100%',
-    overflowX: 'auto',
+  trendGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+    gap: SPACE.sm,
   },
+  trendCard: {
+    backgroundColor: COLORS.bg,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    padding: SPACE.sm,
+  },
+  trendTitle: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.xs,
+    color: COLORS.text,
+    textTransform: 'uppercase',
+    marginBottom: SPACE.xs,
+  },
+  chartWrap: { width: '100%', overflowX: 'auto' },
   chartToolbar: {
     display: 'flex',
     justifyContent: 'flex-end',
@@ -171,12 +146,7 @@ const styles = {
     color: COLORS.muted,
     textTransform: 'uppercase',
   },
-  chartSvg: {
-    width: '100%',
-    minWidth: 520,
-    height: 280,
-    display: 'block',
-  },
+  chartSvg: { width: '100%', minWidth: 520, height: 280, display: 'block' },
   empty: {
     minHeight: 220,
     display: 'flex',
@@ -204,582 +174,303 @@ const styles = {
     fontFamily: FONTS.mono,
     fontSize: SIZE.sm,
   },
-  heatmap: {
-    overflow: 'auto',
-    maxHeight: 520,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-  },
-  heatmapExpanded: {
-    maxHeight: 'calc(90vh - 152px)',
-  },
-  heatmapGrid: {
-    display: 'grid',
-    minWidth: 'max-content',
-  },
+  heatmap: { overflow: 'auto', maxHeight: 520, border: `1px solid ${COLORS.border}`, borderRadius: 6 },
+  heatmapExpanded: { maxHeight: 'calc(90vh - 152px)' },
+  heatmapGrid: { display: 'grid', minWidth: 'max-content' },
   heatmapHeader: {
-    position: 'sticky',
-    top: 0,
-    zIndex: 2,
+    position: 'sticky', top: 0, zIndex: 2,
     backgroundColor: COLORS.bg,
     borderBottom: `1px solid ${COLORS.border}`,
     padding: SPACE.sm,
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.xs,
-    color: COLORS.muted,
-    whiteSpace: 'nowrap',
+    fontFamily: FONTS.mono, fontSize: SIZE.xs, color: COLORS.muted, whiteSpace: 'nowrap',
   },
   heatmapTest: {
-    position: 'sticky',
-    left: 0,
-    zIndex: 1,
+    position: 'sticky', left: 0, zIndex: 1,
     backgroundColor: COLORS.bg,
     borderRight: `1px solid ${COLORS.border}`,
     padding: SPACE.sm,
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.xs,
-    color: COLORS.text,
-    whiteSpace: 'nowrap',
+    fontFamily: FONTS.mono, fontSize: SIZE.xs, color: COLORS.text, whiteSpace: 'nowrap',
   },
   heatmapCell: {
-    width: 92,
-    minHeight: 38,
-    padding: SPACE.xs,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 92, minHeight: 38, padding: SPACE.xs,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
     borderRight: `1px solid ${COLORS.border}`,
     borderBottom: `1px solid ${COLORS.border}`,
+    fontFamily: FONTS.mono, fontSize: SIZE.xs, color: COLORS.bg,
+  },
+  panelButton: {
+    backgroundColor: COLORS.bg,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    color: COLORS.text,
+    cursor: 'pointer',
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
-    color: COLORS.bg,
-  },
-  modalOverlay: {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 1000,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 'min(4vw, 24px)',
-    backgroundColor: 'rgba(0, 0, 0, 0.66)',
-    backdropFilter: 'blur(4px)',
-    WebkitBackdropFilter: 'blur(4px)',
-    boxSizing: 'border-box',
-  },
-  modal: {
-    width: '95vw',
-    height: '90vh',
-    maxWidth: 1500,
-    backgroundColor: COLORS.surface,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 8,
-    boxShadow: '0 28px 80px rgba(0, 0, 0, 0.52)',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: SPACE.md,
-    padding: `${SPACE.md}px ${SPACE.lg}px`,
-    borderBottom: `1px solid ${COLORS.border}`,
-    flexShrink: 0,
-  },
-  modalTitle: {
-    margin: 0,
-    marginBottom: SPACE.xs,
-    fontFamily: FONTS.serif,
-    fontSize: SIZE.xl,
-    color: COLORS.text,
-  },
-  modalBody: {
-    flex: 1,
-    overflow: 'auto',
-    padding: SPACE.lg,
+    padding: `${SPACE.xs}px ${SPACE.sm}px`,
   },
 };
 
-const CHART = {
-  width: 720,
-  height: 280,
-  left: 54,
-  right: 18,
-  top: 20,
-  bottom: 48,
-};
+/* ─── Chart layout constants ─────────────────────────────────────────────── */
 
-function dateValue(value) {
-  if (!value) return null;
-  const d = new Date(value);
+const CHART = { width: 720, height: 280, left: 54, right: 18, top: 20, bottom: 48 };
+
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
+
+function dateValue(v) {
+  if (!v) return null;
+  if (typeof v?.toDate === 'function') {
+    const d = v.toDate();
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof v === 'object') {
+    const seconds = v.seconds ?? v._seconds;
+    if (Number.isFinite(seconds)) {
+      const d = new Date(seconds * 1000);
+      return isNaN(d.getTime()) ? null : d;
+    }
+  }
+  const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 }
-
-function formatDate(value) {
-  const d = dateValue(value);
-  if (!d) return 'Unknown date';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function formatDate(v) {
+  const d = dateValue(v);
+  return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown date';
 }
-
-function formatShortDate(value) {
-  const d = dateValue(value);
-  if (!d) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function formatShortDate(v) {
+  const d = dateValue(v);
+  return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
 }
-
-function pct(value) {
-  return `${Math.round(value || 0)}%`;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function uniq(values) {
-  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
-}
+function pct(v) { return `${Math.round(v || 0)}%`; }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function uniq(arr) { return Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b)); }
+function average(arr) { return arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0; }
 
 function normalizeTopic(result, attempt) {
-  return result.sourceNoteTopic ||
-    result.topic ||
-    result.sourceConcept ||
-    result.conceptId ||
-    attempt.topic ||
-    attempt.testTopic ||
-    'Untitled topic';
+  return result.sourceNoteTopic || result.topic || result.sourceConcept ||
+    result.conceptId || attempt.topic || attempt.testTopic || 'Untitled topic';
 }
-
-function scoreFromQuestion(result) {
-  if (typeof result.aiScore === 'number') return clamp(result.aiScore, 0, 100);
-  if (typeof result.score === 'number') return clamp(result.score, 0, 100);
-  if (typeof result.correct === 'boolean') return result.correct ? 100 : 0;
-  if (typeof result.isCorrect === 'boolean') return result.isCorrect ? 100 : 0;
+function scoreFromQuestion(r) {
+  if (typeof r.aiScore === 'number') return clamp(r.aiScore, 0, 100);
+  if (typeof r.score === 'number') return clamp(r.score, 0, 100);
+  if (typeof r.correct === 'boolean') return r.correct ? 100 : 0;
+  if (typeof r.isCorrect === 'boolean') return r.isCorrect ? 100 : 0;
   return null;
 }
-
-function scoreFromAttempt(attempt, questionScores) {
+function scoreFromAttempt(attempt, qScores) {
   if (typeof attempt.scorePercent === 'number') return clamp(attempt.scorePercent, 0, 100);
   if (typeof attempt.score === 'number') return clamp(attempt.score, 0, 100);
-  if (questionScores.length) {
-    return questionScores.reduce((sum, value) => sum + value, 0) / questionScores.length;
-  }
-  return 0;
+  return qScores.length ? average(qScores) : 0;
 }
 
 function flattenAttempts(attempts = []) {
-  const tests = [];
-  const questions = [];
-
-  attempts.forEach((attempt, index) => {
-    const resultEntries = Object.entries(attempt.perQuestionResults || {});
+  const tests = [], questions = [];
+  attempts.forEach((attempt, idx) => {
+    const entries = Object.entries(attempt.perQuestionResults || {});
     const domain = attempt.domainId || attempt.domain || attempt.testDomain || 'General';
     const section = attempt.sectionId || attempt.section || attempt.testSection || 'Main';
-    const submittedAt = attempt.submittedAt || attempt.SubmittedAt || attempt.completedAt || attempt.updatedAt || attempt.createdAt;
-    const testId = attempt.testId || attempt.id || `attempt-${index + 1}`;
-    const questionScores = [];
+    const date = dateValue(attempt.submittedAt || attempt.SubmittedAt || attempt.completedAt || attempt.updatedAt || attempt.createdAt);
+    const testId = attempt.testId || attempt.id || `attempt-${idx + 1}`;
+    const qScores = [];
     let totalTime = 0;
 
-    resultEntries.forEach(([questionId, result]) => {
+    entries.forEach(([qId, result]) => {
       const score = scoreFromQuestion(result);
       if (score == null) return;
-
-      const timeSpent = Number(result.timing ?? result.timeSpent ?? attempt.timings?.[questionId] ?? 0) || 0;
-      const topic = normalizeTopic(result, attempt);
-      questionScores.push(score);
+      const timeSpent = Number(result.timing ?? result.timeSpent ?? attempt.timings?.[qId] ?? 0) || 0;
+      qScores.push(score);
       totalTime += timeSpent;
-
       questions.push({
-        id: `${attempt.id || testId}-${questionId}`,
-        domain,
-        section,
-        topic,
+        id: `${attempt.id || testId}-${qId}`,
+        domain, section, topic: normalizeTopic(result, attempt),
         timeSpent,
         score,
+        confidence: result.confidence ?? result.aiConfidence ?? attempt.averageConfidence ?? null,
         testId,
         attemptId: attempt.id,
-        date: submittedAt,
+        date,
       });
     });
 
-    const fallbackTotalQuestions = Number(attempt.totalQuestions || 0);
-    const totalQuestions = questionScores.length || fallbackTotalQuestions || 1;
+    const totalQuestions = qScores.length || Number(attempt.totalQuestions || 0) || 1;
     const fallbackTime = Number(attempt.avgTimePerQuestion || 0) * totalQuestions;
-    const score = scoreFromAttempt(attempt, questionScores);
-
     tests.push({
-      id: attempt.id || testId,
-      testId,
-      domain,
-      section,
-      topic: attempt.topic || attempt.testTopic || '',
-      date: submittedAt,
-      score,
+      id: attempt.id || testId, testId, domain, section,
+      topic: attempt.topic || attempt.testTopic || '', date,
+      score: scoreFromAttempt(attempt, qScores),
       questionCount: totalQuestions,
       totalTime: totalTime || Number(attempt.totalTime || 0) || fallbackTime || 0,
     });
   });
-
   return { tests, questions };
 }
 
-function filterByDate(item, filters) {
+function filterByDate(item, f) {
   const d = dateValue(item.date);
   if (!d) return true;
-  if (filters.startDate && d < new Date(`${filters.startDate}T00:00:00`)) return false;
-  if (filters.endDate && d > new Date(`${filters.endDate}T23:59:59`)) return false;
+  if (f.startDate && d < new Date(`${f.startDate}T00:00:00`)) return false;
+  if (f.endDate && d > new Date(`${f.endDate}T23:59:59`)) return false;
   return true;
 }
 
-function getGroupLevel(filters) {
-  if (!filters.domain) return 'domain';
-  if (!filters.section) return 'section';
-  return 'topic';
+function filterTest(test, f) {
+  return (!f.domain || test.domain === f.domain) &&
+    (!f.section || test.section === f.section) &&
+    filterByDate(test, f);
 }
 
-function average(values) {
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+function getGroupLevel(f) {
+  if (!f.domain) return 'domain';
+  if (!f.section) return 'section';
+  return 'topic';
 }
 
 function topicPerformance(questions, groupLevel) {
   const groups = new Map();
-  questions.forEach((item) => {
-    const key = item[groupLevel] || 'Unknown';
-    const group = groups.get(key) || { label: key, scores: [], questions: 0, time: 0 };
-    group.scores.push(item.score);
-    group.questions += 1;
-    group.time += item.timeSpent;
-    groups.set(key, group);
+  questions.forEach((q) => {
+    const key = q[groupLevel] || 'Unknown';
+    const g = groups.get(key) || { label: key, scores: [], questions: 0, time: 0 };
+    g.scores.push(q.score); g.questions++; g.time += q.timeSpent;
+    groups.set(key, g);
   });
-
   return Array.from(groups.values())
-    .map(group => ({
-      ...group,
-      accuracy: average(group.scores),
-    }))
+    .map((g) => ({ ...g, accuracy: average(g.scores) }))
     .sort((a, b) => a.accuracy - b.accuracy);
 }
 
 function progressSeries(tests) {
   return [...tests]
-    .filter(test => dateValue(test.date))
+    .filter((t) => dateValue(t.date))
     .sort((a, b) => dateValue(a.date) - dateValue(b.date))
-    .map((test, index) => ({ ...test, index: index + 1 }));
+    .map((t, i) => ({ ...t, index: i + 1 }));
 }
 
-function movingAverage(points, windowSize = 3) {
-  return points.map((point, index) => {
-    const slice = points.slice(Math.max(0, index - windowSize + 1), index + 1);
-    return { ...point, score: average(slice.map(item => item.score)) };
+function movingAverage(points, w = 3) {
+  return points.map((p, i) => {
+    const slice = points.slice(Math.max(0, i - w + 1), i + 1);
+    return { ...p, score: average(slice.map((x) => x.score)) };
   });
 }
 
 function heatmapData(questions, expanded = false) {
-  const topics = uniq(questions.map(item => item.topic));
+  const topics = uniq(questions.map((q) => q.topic));
   const byTest = new Map();
-
-  questions.forEach((item) => {
-    const row = byTest.get(item.testId) || {
-      testId: item.testId,
-      date: item.date,
-      cells: new Map(),
-    };
-    const cell = row.cells.get(item.topic) || [];
-    cell.push(item.score);
-    row.cells.set(item.topic, cell);
-    byTest.set(item.testId, row);
+  questions.forEach((q) => {
+    const row = byTest.get(q.testId) || { testId: q.testId, date: q.date, cells: new Map() };
+    const cell = row.cells.get(q.topic) || [];
+    cell.push(q.score);
+    row.cells.set(q.topic, cell);
+    byTest.set(q.testId, row);
   });
-
   const tests = Array.from(byTest.values())
     .sort((a, b) => (dateValue(b.date)?.getTime() || 0) - (dateValue(a.date)?.getTime() || 0))
     .slice(0, expanded ? 80 : 18);
-
   return { topics: topics.slice(0, expanded ? 40 : 14), tests };
 }
 
 function testsFromQuestions(questions, allTests) {
-  const testLookup = new Map(allTests.map(test => [test.id, test]));
+  const lookup = new Map(allTests.map((t) => [t.id, t]));
   const groups = new Map();
-
-  questions.forEach((item) => {
-    const key = item.attemptId || item.testId;
-    const base = testLookup.get(key);
-    const group = groups.get(key) || {
-      id: key,
-      testId: item.testId,
-      domain: item.domain,
-      section: item.section,
-      date: item.date || base?.date,
-      scores: [],
-      totalTime: 0,
-      questionCount: 0,
+  questions.forEach((q) => {
+    const key = q.attemptId || q.testId;
+    const base = lookup.get(key);
+    const g = groups.get(key) || {
+      id: key, testId: q.testId, domain: q.domain, section: q.section,
+      date: q.date || base?.date, scores: [], totalTime: 0, questionCount: 0,
     };
-
-    group.scores.push(item.score);
-    group.totalTime += item.timeSpent;
-    group.questionCount += 1;
-    groups.set(key, group);
+    g.scores.push(q.score); g.totalTime += q.timeSpent; g.questionCount++;
+    groups.set(key, g);
   });
-
-  return Array.from(groups.values()).map(group => ({
-    ...group,
-    score: average(group.scores),
-  }));
+  return Array.from(groups.values()).map((g) => ({ ...g, score: average(g.scores) }));
 }
 
-function valueToColor(value) {
-  if (value == null) return COLORS.bg;
-  const ratio = clamp(value, 0, 100) / 100;
-  if (ratio < 0.5) return COLORS.error;
-  if (ratio < 0.75) return COLORS.diffMedium;
-  if (ratio < 0.9) return COLORS.diffEasy;
+function valueToColor(v) {
+  if (v == null) return COLORS.bg;
+  const r = clamp(v, 0, 100) / 100;
+  if (r < 0.5) return COLORS.error;
+  if (r < 0.75) return COLORS.diffMedium;
+  if (r < 0.9) return COLORS.diffEasy;
   return COLORS.success;
 }
-
-function axisTextProps() {
-  return {
-    fill: COLORS.muted,
-    fontFamily: FONTS.mono,
-    fontSize: 11,
-  };
-}
-
-function EmptyChart({ children }) {
-  return <div style={styles.empty}>{children}</div>;
-}
-
+function axisText() { return { fill: COLORS.muted, fontFamily: FONTS.mono, fontSize: 11 }; }
+function EmptyChart({ children }) { return <div style={styles.empty}>{children}</div>; }
 function chartSvgStyle(expanded, minWidth = 900, height = 460) {
-  return {
-    ...styles.chartSvg,
-    height: expanded ? height : styles.chartSvg.height,
-    minWidth: expanded ? minWidth : styles.chartSvg.minWidth,
-  };
+  return { ...styles.chartSvg, height: expanded ? height : styles.chartSvg.height, minWidth: expanded ? minWidth : styles.chartSvg.minWidth };
 }
 
-function ChartPanel({ id, title, purpose, collapsed, wide = false, onToggleCollapse, onExpand, children }) {
-  return (
-    <section
-      className="analytics-chart-card"
-      style={{
-        ...styles.panel,
-        ...(wide ? styles.panelWide : {}),
-        ...(collapsed ? styles.panelCollapsed : {}),
-      }}
-    >
-      <div style={styles.panelHeaderRow}>
-        <div style={styles.panelTitleBlock}>
-          <h2 style={styles.panelTitle}>{title}</h2>
-          {!collapsed && <div style={styles.panelPurpose}>{purpose}</div>}
-        </div>
-        <div style={styles.panelActions}>
-          <button type="button" style={styles.panelButton} onClick={() => onToggleCollapse(id)}>
-            {collapsed ? 'Show' : 'Collapse'}
-          </button>
-          {!collapsed && (
-            <button
-              type="button"
-              aria-label={`Open ${title} fullscreen`}
-              title="Open fullscreen"
-              style={{ ...styles.panelButton, ...styles.panelIconButton }}
-              onClick={() => onExpand(id)}
-            >
-              ⛶
-            </button>
-          )}
-        </div>
-      </div>
-      {!collapsed && (
-        <div
-          role="button"
-          tabIndex={0}
-          title={`Open ${title} fullscreen`}
-          style={styles.chartClickTarget}
-          onClick={() => onExpand(id)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              onExpand(id);
-            }
-          }}
-        >
-          {children}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ChartRenderer({ chart, fullscreen = false }) {
-  if (!chart) return null;
-  const Component = chart.component;
-  return <Component {...chart.props} expanded={fullscreen} fullscreen={fullscreen} detailed={fullscreen} />;
-}
-
-function ChartModal({ chart, onClose }) {
-  const [closing, setClosing] = useState(false);
-  const closingRef = useRef(false);
-  const closeTimerRef = useRef(null);
-
-  const requestClose = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    setClosing(true);
-    closeTimerRef.current = window.setTimeout(() => {
-      closingRef.current = false;
-      setClosing(false);
-      onClose();
-    }, 170);
-  }, [onClose]);
-
-  useEffect(() => {
-    if (!chart) return undefined;
-    closingRef.current = false;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') requestClose();
-    };
-
-    window.addEventListener('keydown', closeOnEscape);
-    const resizeFrame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
-      cancelAnimationFrame(resizeFrame);
-      if (closeTimerRef.current) {
-        window.clearTimeout(closeTimerRef.current);
-      }
-    };
-  }, [chart, requestClose]);
-
-  if (!chart) return null;
-
-  return (
-    <div
-      className={`analytics-modal-overlay${closing ? ' analytics-modal-closing' : ''}`}
-      style={styles.modalOverlay}
-      onMouseDown={requestClose}
-    >
-      <div
-        className={`analytics-modal${closing ? ' analytics-modal-closing' : ''}`}
-        style={styles.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${chart.id}-fullscreen-title`}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div style={styles.modalHeader}>
-          <div>
-            <h2 id={`${chart.id}-fullscreen-title`} style={styles.modalTitle}>{chart.title}</h2>
-            <div style={styles.panelPurpose}>{chart.purpose}</div>
-          </div>
-          <button
-            type="button"
-            aria-label="Close fullscreen chart"
-            title="Close"
-            style={{ ...styles.panelButton, ...styles.panelIconButton }}
-            onClick={requestClose}
-          >
-            X
-          </button>
-        </div>
-        <div style={styles.modalBody}>
-          <ChartRenderer chart={chart} fullscreen />
-        </div>
-      </div>
-    </div>
-  );
-}
+/* ─── Chart Components ────────────────────────────────────────────────────── */
 
 function BarChart({ data, groupLevel, expanded = false }) {
   const [sortBy, setSortBy] = useState('accuracy');
   if (!data.length) return <EmptyChart>No topic performance data for these filters.</EmptyChart>;
 
-  const sortedData = expanded
-    ? [...data].sort((a, b) => {
-      if (sortBy === 'label') return a.label.localeCompare(b.label);
-      if (sortBy === 'questions') return b.questions - a.questions;
-      return a.accuracy - b.accuracy;
-    })
+  const sorted = expanded
+    ? [...data].sort((a, b) =>
+        sortBy === 'label' ? a.label.localeCompare(b.label)
+        : sortBy === 'questions' ? b.questions - a.questions
+        : a.accuracy - b.accuracy)
     : data;
-  const innerWidth = CHART.width - CHART.left - CHART.right;
-  const innerHeight = CHART.height - CHART.top - CHART.bottom;
+
+  const { width, height, left, right, top, bottom } = CHART;
+  const innerW = width - left - right;
+  const innerH = height - top - bottom;
   const barGap = 10;
-  const barWidth = Math.max(expanded ? 34 : 18, (innerWidth - barGap * (sortedData.length - 1)) / sortedData.length);
-  const label = groupLevel === 'domain' ? 'Domains' : groupLevel === 'section' ? 'Sections' : 'Topics';
-  const minWidth = Math.max(900, sortedData.length * (expanded ? 86 : 56));
+  const barWidth = Math.max(expanded ? 34 : 18, (innerW - barGap * (sorted.length - 1)) / sorted.length);
+  const groupLabel = groupLevel === 'domain' ? 'Domains' : groupLevel === 'section' ? 'Sections' : 'Topics';
+  const minWidth = Math.max(900, sorted.length * (expanded ? 86 : 56));
 
   return (
     <>
       {expanded && (
-        <div style={styles.chartToolbar} onClick={(event) => event.stopPropagation()}>
-          <span style={styles.chartToolbarLabel}>Sort</span>
-          {[
-            ['accuracy', 'Score'],
-            ['questions', 'Questions'],
-            ['label', label],
-          ].map(([value, text]) => (
-            <button
-              key={value}
-              type="button"
-              style={{
-                ...styles.panelButton,
-                borderColor: sortBy === value ? COLORS.accent : COLORS.border,
-                color: sortBy === value ? COLORS.accent : COLORS.text,
-              }}
-              onClick={() => setSortBy(value)}
-            >
-              {text}
-            </button>
+        <div style={styles.chartToolbar} onClick={(e) => e.stopPropagation()}>
+          <span style={styles.chartToolbarLabel}>Sort by</span>
+          {[['accuracy','Score'],['questions','Questions'],['label', groupLabel]].map(([val, txt]) => (
+            <button key={val} type="button"
+              style={{ ...styles.panelButton, borderColor: sortBy === val ? COLORS.accent : COLORS.border, color: sortBy === val ? COLORS.accent : COLORS.text }}
+              onClick={() => setSortBy(val)}>{txt}</button>
           ))}
         </div>
       )}
       <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded, minWidth, 500)} role="img" aria-label="Topic performance bar chart">
-        <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
-        <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
-        {[0, 25, 50, 75, 100].map(tick => {
-          const y = CHART.top + innerHeight - (tick / 100) * innerHeight;
-          return (
-            <g key={tick}>
-              <line x1={CHART.left} y1={y} x2={CHART.left + innerWidth} y2={y} stroke={COLORS.border} opacity="0.35" />
-              <text x={CHART.left - 10} y={y + 4} textAnchor="end" {...axisTextProps()}>{tick}%</text>
-            </g>
-          );
-        })}
-        {sortedData.map((item, index) => {
-          const x = CHART.left + index * (barWidth + barGap);
-          const height = (item.accuracy / 100) * innerHeight;
-          const y = CHART.top + innerHeight - height;
-          return (
-            <g key={item.label}>
-              <rect x={x} y={y} width={barWidth} height={height} fill={valueToColor(item.accuracy)} rx="3">
-                <title>{`${item.label}: ${pct(item.accuracy)} across ${item.questions} question${item.questions === 1 ? '' : 's'}`}</title>
-              </rect>
-              <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" fill={COLORS.text} fontFamily={FONTS.mono} fontSize="11">
-                {pct(item.accuracy)}
-              </text>
-              <text
-                x={x + barWidth / 2}
-                y={CHART.top + innerHeight + 18}
-                textAnchor={expanded ? 'end' : 'middle'}
-                transform={expanded ? `rotate(-35 ${x + barWidth / 2} ${CHART.top + innerHeight + 18})` : undefined}
-                {...axisTextProps()}
-              >
-                {expanded ? item.label : item.label.length > 10 ? `${item.label.slice(0, 10)}...` : item.label}
-              </text>
-              <text x={x + barWidth / 2} y={CHART.top + innerHeight + 34} textAnchor="middle" {...axisTextProps()}>
-                {item.questions}q
-              </text>
-            </g>
-          );
-        })}
-        <text x={CHART.left + innerWidth / 2} y={CHART.height - 4} textAnchor="middle" {...axisTextProps()}>{label}</text>
-      </svg>
+        <svg viewBox={`0 0 ${width} ${height}`} style={chartSvgStyle(expanded, minWidth, 500)} role="img" aria-label="Topic performance bar chart">
+          <line x1={left} y1={top} x2={left} y2={top + innerH} stroke={COLORS.border} />
+          <line x1={left} y1={top + innerH} x2={left + innerW} y2={top + innerH} stroke={COLORS.border} />
+          {[0, 25, 50, 75, 100].map((tick) => {
+            const y = top + innerH - (tick / 100) * innerH;
+            return (
+              <g key={tick}>
+                <line x1={left} y1={y} x2={left + innerW} y2={y} stroke={COLORS.border} opacity="0.35" />
+                <text x={left - 10} y={y + 4} textAnchor="end" {...axisText()}>{tick}%</text>
+              </g>
+            );
+          })}
+          {sorted.map((item, i) => {
+            const x = left + i * (barWidth + barGap);
+            const bh = (item.accuracy / 100) * innerH;
+            const y = top + innerH - bh;
+            return (
+              <g key={item.label}>
+                <rect x={x} y={y} width={barWidth} height={bh} fill={valueToColor(item.accuracy)} rx="3">
+                  <title>{`${item.label}: ${pct(item.accuracy)} across ${item.questions} question${item.questions === 1 ? '' : 's'}`}</title>
+                </rect>
+                <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" fill={COLORS.text} fontFamily={FONTS.mono} fontSize={expanded ? 13 : 11}>
+                  {pct(item.accuracy)}
+                </text>
+                <text
+                  x={x + barWidth / 2} y={top + innerH + 18}
+                  textAnchor={expanded ? 'end' : 'middle'}
+                  transform={expanded ? `rotate(-35 ${x + barWidth / 2} ${top + innerH + 18})` : undefined}
+                  {...axisText()} fontSize={expanded ? 12 : 11}
+                >
+                  {expanded ? item.label : item.label.length > 10 ? `${item.label.slice(0, 10)}…` : item.label}
+                </text>
+                <text x={x + barWidth / 2} y={top + innerH + (expanded ? 38 : 34)} textAnchor="middle" {...axisText()}>
+                  {item.questions}q
+                </text>
+              </g>
+            );
+          })}
+          <text x={left + innerW / 2} y={height - 4} textAnchor="middle" {...axisText()}>{groupLabel}</text>
+        </svg>
       </div>
     </>
   );
@@ -787,43 +478,52 @@ function BarChart({ data, groupLevel, expanded = false }) {
 
 function LineChart({ data, showMovingAverage, expanded = false }) {
   if (data.length < 2) return <EmptyChart>Take at least two tests to see progress over time.</EmptyChart>;
-
-  const innerWidth = CHART.width - CHART.left - CHART.right;
-  const innerHeight = CHART.height - CHART.top - CHART.bottom;
-  const xFor = (_, index) => CHART.left + (index / Math.max(1, data.length - 1)) * innerWidth;
-  const yFor = score => CHART.top + innerHeight - (score / 100) * innerHeight;
-  const path = data.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(point, index)} ${yFor(point.score)}`).join(' ');
+  const { width, height, left, right, top, bottom } = CHART;
+  const innerW = width - left - right;
+  const innerH = height - top - bottom;
+  const xFor = (_, i) => left + (i / Math.max(1, data.length - 1)) * innerW;
+  const yFor = (s) => top + innerH - (s / 100) * innerH;
+  const path = data.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(p, i)} ${yFor(p.score)}`).join(' ');
   const ma = movingAverage(data);
-  const maPath = ma.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(point, index)} ${yFor(point.score)}`).join(' ');
+  const maPath = ma.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xFor(p, i)} ${yFor(p.score)}`).join(' ');
+  const tickEvery = Math.ceil(data.length / (expanded ? 12 : 6));
 
   return (
     <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded, Math.max(900, data.length * 88), 500)} role="img" aria-label="Progress over time line chart">
-        <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
-        <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
-        {[0, 25, 50, 75, 100].map(tick => {
+      <svg viewBox={`0 0 ${width} ${height}`} style={chartSvgStyle(expanded, Math.max(900, data.length * 88), 500)} role="img" aria-label="Progress over time line chart">
+        <line x1={left} y1={top} x2={left} y2={top + innerH} stroke={COLORS.border} />
+        <line x1={left} y1={top + innerH} x2={left + innerW} y2={top + innerH} stroke={COLORS.border} />
+        {[0, 25, 50, 75, 100].map((tick) => {
           const y = yFor(tick);
           return (
             <g key={tick}>
-              <line x1={CHART.left} y1={y} x2={CHART.left + innerWidth} y2={y} stroke={COLORS.border} opacity="0.35" />
-              <text x={CHART.left - 10} y={y + 4} textAnchor="end" {...axisTextProps()}>{tick}%</text>
+              <line x1={left} y1={y} x2={left + innerW} y2={y} stroke={COLORS.border} opacity="0.35" />
+              <text x={left - 10} y={y + 4} textAnchor="end" {...axisText()}>{tick}%</text>
             </g>
           );
         })}
         <path d={path} fill="none" stroke={COLORS.accent} strokeWidth={expanded ? 4 : 3} />
         {showMovingAverage && <path d={maPath} fill="none" stroke={COLORS.success} strokeWidth={expanded ? 3 : 2} strokeDasharray="5 5" />}
-        {data.map((point, index) => (
-          <circle key={point.id} cx={xFor(point, index)} cy={yFor(point.score)} r={expanded ? 7 : 5} fill={COLORS.accent}>
-            <title>{`${formatDate(point.date)}: ${pct(point.score)} (${point.questionCount} questions)`}</title>
+        {data.map((p, i) => (
+          <circle key={p.id} cx={xFor(p, i)} cy={yFor(p.score)} r={expanded ? 7 : 5} fill={COLORS.accent}>
+            <title>{`${formatDate(p.date)}: ${pct(p.score)} (${p.questionCount} questions)`}</title>
           </circle>
         ))}
-        {data.map((point, index) => (
-          index % Math.ceil(data.length / (expanded ? 12 : 6)) === 0 && (
-            <text key={`label-${point.id}`} x={xFor(point, index)} y={CHART.top + innerHeight + 20} textAnchor="middle" {...axisTextProps()}>
-              {expanded ? formatDate(point.date) : formatShortDate(point.date)}
+        {data.map((p, i) =>
+          i % tickEvery === 0 ? (
+            <text key={`lbl-${p.id}`} x={xFor(p, i)} y={top + innerH + 20} textAnchor="middle" {...axisText()} fontSize={expanded ? 12 : 11}>
+              {expanded ? formatDate(p.date) : formatShortDate(p.date)}
             </text>
-          )
-        ))}
+          ) : null
+        )}
+        {showMovingAverage && expanded && (
+          <g>
+            <line x1={left + innerW - 80} y1={top + 10} x2={left + innerW - 65} y2={top + 10} stroke={COLORS.accent} strokeWidth={3} />
+            <text x={left + innerW - 60} y={top + 14} {...axisText()} fontSize={11}>Score</text>
+            <line x1={left + innerW - 80} y1={top + 26} x2={left + innerW - 65} y2={top + 26} stroke={COLORS.success} strokeWidth={2} strokeDasharray="5 5" />
+            <text x={left + innerW - 60} y={top + 30} {...axisText()} fontSize={11}>3-test avg</text>
+          </g>
+        )}
       </svg>
     </div>
   );
@@ -831,29 +531,29 @@ function LineChart({ data, showMovingAverage, expanded = false }) {
 
 function ScatterPlot({ data, expanded = false }) {
   if (!data.length) return <EmptyChart>No completed tests match these filters.</EmptyChart>;
-
-  const innerWidth = CHART.width - CHART.left - CHART.right;
-  const innerHeight = CHART.height - CHART.top - CHART.bottom;
-  const maxTime = Math.max(...data.map(item => item.totalTime), 1);
-  const domains = uniq(data.map(item => item.domain));
+  const { width, height, left, right, top, bottom } = CHART;
+  const innerW = width - left - right;
+  const innerH = height - top - bottom;
+  const maxTime = Math.max(...data.map((d) => d.totalTime), 1);
+  const domains = uniq(data.map((d) => d.domain));
   const palette = [COLORS.accent, COLORS.diffEasy, COLORS.diffMedium, COLORS.error, COLORS.success];
 
   return (
     <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded, 960, 500)} role="img" aria-label="Time vs score scatter plot">
-        <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
-        <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
-        {[0, 25, 50, 75, 100].map(tick => {
-          const y = CHART.top + innerHeight - (tick / 100) * innerHeight;
-          return <text key={tick} x={CHART.left - 10} y={y + 4} textAnchor="end" {...axisTextProps()}>{tick}%</text>;
-        })}
-        {[0, 0.5, 1].map(tick => {
-          const x = CHART.left + tick * innerWidth;
-          return <text key={tick} x={x} y={CHART.top + innerHeight + 22} textAnchor="middle" {...axisTextProps()}>{Math.round((maxTime * tick) / 60)}m</text>;
-        })}
+      <svg viewBox={`0 0 ${width} ${height}`} style={chartSvgStyle(expanded, 960, 500)} role="img" aria-label="Time vs score scatter plot">
+        <line x1={left} y1={top} x2={left} y2={top + innerH} stroke={COLORS.border} />
+        <line x1={left} y1={top + innerH} x2={left + innerW} y2={top + innerH} stroke={COLORS.border} />
+        {[0, 25, 50, 75, 100].map((tick) => (
+          <text key={tick} x={left - 10} y={top + innerH - (tick / 100) * innerH + 4} textAnchor="end" {...axisText()}>{tick}%</text>
+        ))}
+        {[0, 0.5, 1].map((tick) => (
+          <text key={tick} x={left + tick * innerW} y={top + innerH + 22} textAnchor="middle" {...axisText()}>
+            {Math.round((maxTime * tick) / 60)}m
+          </text>
+        ))}
         {data.map((point) => {
-          const x = CHART.left + (point.totalTime / maxTime) * innerWidth;
-          const y = CHART.top + innerHeight - (point.score / 100) * innerHeight;
+          const x = left + (point.totalTime / maxTime) * innerW;
+          const y = top + innerH - (point.score / 100) * innerH;
           const r = clamp((expanded ? 6 : 4) + point.questionCount, expanded ? 8 : 5, expanded ? 22 : 16);
           const color = palette[domains.indexOf(point.domain) % palette.length] || COLORS.accent;
           return (
@@ -862,7 +562,13 @@ function ScatterPlot({ data, expanded = false }) {
             </circle>
           );
         })}
-        <text x={CHART.left + innerWidth / 2} y={CHART.height - 4} textAnchor="middle" {...axisTextProps()}>Time spent per test</text>
+        {expanded && domains.slice(0, 5).map((d, i) => (
+          <g key={d}>
+            <circle cx={left + innerW - 100} cy={top + 14 + i * 20} r={6} fill={palette[i % palette.length]} opacity="0.85" />
+            <text x={left + innerW - 90} y={top + 18 + i * 20} {...axisText()} fontSize={11}>{d.length > 14 ? `${d.slice(0, 14)}…` : d}</text>
+          </g>
+        ))}
+        <text x={left + innerW / 2} y={height - 4} textAnchor="middle" {...axisText()}>Time spent per test</text>
       </svg>
     </div>
   );
@@ -871,35 +577,28 @@ function ScatterPlot({ data, expanded = false }) {
 function Heatmap({ data, expanded = false }) {
   const { topics, tests } = data;
   if (!topics.length || !tests.length) return <EmptyChart>No topic-by-test data for these filters.</EmptyChart>;
-
   const cellWidth = expanded ? 116 : 92;
 
   return (
     <div style={{ ...styles.heatmap, ...(expanded ? styles.heatmapExpanded : {}) }}>
-      <div
-        style={{
-          ...styles.heatmapGrid,
-          gridTemplateColumns: `${expanded ? 220 : 180}px repeat(${topics.length}, ${cellWidth}px)`,
-        }}
-      >
+      <div style={{ ...styles.heatmapGrid, gridTemplateColumns: `${expanded ? 220 : 180}px repeat(${topics.length}, ${cellWidth}px)` }}>
         <div style={{ ...styles.heatmapHeader, left: 0 }}>Test</div>
-        {topics.map(topic => (
+        {topics.map((topic) => (
           <div key={topic} style={styles.heatmapHeader} title={topic}>
-            {expanded ? topic : topic.length > 12 ? `${topic.slice(0, 12)}...` : topic}
+            {expanded ? topic : topic.length > 12 ? `${topic.slice(0, 12)}…` : topic}
           </div>
         ))}
-        {tests.map(test => (
+        {tests.map((test) => (
           <Fragment key={test.testId}>
-            <div key={`${test.testId}-label`} style={styles.heatmapTest} title={test.testId}>
+            <div style={styles.heatmapTest} title={test.testId}>
               <div>{formatShortDate(test.date)}</div>
               <div style={{ color: COLORS.muted }}>{test.testId.slice(0, 12)}</div>
             </div>
-            {topics.map(topic => {
-              const values = test.cells.get(topic);
-              const value = values ? average(values) : null;
+            {topics.map((topic) => {
+              const vals = test.cells.get(topic);
+              const value = vals ? average(vals) : null;
               return (
-                <div
-                  key={`${test.testId}-${topic}`}
+                <div key={`${test.testId}-${topic}`}
                   style={{
                     ...styles.heatmapCell,
                     width: cellWidth,
@@ -922,56 +621,80 @@ function Heatmap({ data, expanded = false }) {
   );
 }
 
-export default function Statistics() {
-  const [filters, setFilters] = useState({
-    domain: '',
-    section: '',
-    topic: '',
-    startDate: '',
-    endDate: '',
-  });
-  const [showMovingAverage, setShowMovingAverage] = useState(true);
-  const [collapsedCharts, setCollapsedCharts] = useState({});
-  const [expandedChartId, setExpandedChartId] = useState(null);
+/* ─── Statistics Page ─────────────────────────────────────────────────────── */
 
-  const {
-    data: attempts = [],
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
+export default function Statistics() {
+  const [filters, setFilters] = useState({ domain: '', section: '', topic: '', startDate: '', endDate: '' });
+  const [showMovingAverage, setShowMovingAverage] = useState(true);
+
+  const { data: attempts = [], isLoading, error, refetch } = useQuery({
     queryKey: ['stats-attempts'],
     queryFn: () => getAttempts({ status: 'completed', limit: 1000, offset: 0 }),
   });
 
   const { tests, questions } = useMemo(() => flattenAttempts(attempts), [attempts]);
 
-  const domainOptions = useMemo(() => uniq(questions.map(item => item.domain)), [questions]);
-  const sectionOptions = useMemo(() => uniq(questions.filter(item => !filters.domain || item.domain === filters.domain).map(item => item.section)), [questions, filters.domain]);
-  const topicOptions = useMemo(() => uniq(questions.filter(item =>
-    (!filters.domain || item.domain === filters.domain) &&
-    (!filters.section || item.section === filters.section)
-  ).map(item => item.topic)), [questions, filters.domain, filters.section]);
+  const domainOptions = useMemo(() => uniq([
+    ...questions.map((q) => q.domain),
+    ...tests.map((t) => t.domain),
+  ]), [questions, tests]);
+  const sectionOptions = useMemo(
+    () => uniq([
+      ...questions.filter((q) => !filters.domain || q.domain === filters.domain).map((q) => q.section),
+      ...tests.filter((t) => !filters.domain || t.domain === filters.domain).map((t) => t.section),
+    ]),
+    [questions, tests, filters.domain]
+  );
+  const topicOptions = useMemo(
+    () => uniq(questions.filter((q) =>
+      (!filters.domain || q.domain === filters.domain) &&
+      (!filters.section || q.section === filters.section)
+    ).map((q) => q.topic)),
+    [questions, filters.domain, filters.section]
+  );
 
-  const filteredQuestions = useMemo(() => questions.filter(item =>
-    (!filters.domain || item.domain === filters.domain) &&
-    (!filters.section || item.section === filters.section) &&
-    (!filters.topic || item.topic === filters.topic) &&
-    filterByDate(item, filters)
-  ), [questions, filters]);
+  const filteredQuestions = useMemo(
+    () => questions.filter((q) =>
+      (!filters.domain || q.domain === filters.domain) &&
+      (!filters.section || q.section === filters.section) &&
+      (!filters.topic || q.topic === filters.topic) &&
+      filterByDate(q, filters)
+    ),
+    [questions, filters]
+  );
 
-  const filteredTests = useMemo(() => testsFromQuestions(filteredQuestions, tests), [filteredQuestions, tests]);
+  const filteredTests = useMemo(() => {
+    if (filters.topic) return testsFromQuestions(filteredQuestions, tests);
+    return tests.filter((test) => filterTest(test, filters));
+  }, [filteredQuestions, filters, tests]);
 
   const groupLevel = getGroupLevel(filters);
   const barData = useMemo(() => topicPerformance(filteredQuestions, groupLevel), [filteredQuestions, groupLevel]);
   const lineData = useMemo(() => progressSeries(filteredTests), [filteredTests]);
   const heatData = useMemo(() => heatmapData(filteredQuestions), [filteredQuestions]);
   const expandedHeatData = useMemo(() => heatmapData(filteredQuestions, true), [filteredQuestions]);
-  const avgScore = average(filteredTests.map(test => test.score));
-  const avgTime = average(filteredTests.map(test => test.totalTime));
+
+  const avgScore = average(filteredTests.map((t) => t.score));
+  const avgTime = average(filteredTests.map((t) => t.totalTime));
   const weakest = barData[0]?.label || 'Not enough data';
+  const insightPipeline = useMemo(
+    () => buildLearningInsightPipeline({ questions: filteredQuestions, tests: filteredTests }),
+    [filteredQuestions, filteredTests]
+  );
+
+  /**
+   * Chart config — add more entries here to get a new chart with
+   * fullscreen expansion for free. ChartGrid handles all layout + modal logic.
+   */
+
+  // Shared data bundle for the learning intelligence charts
+  const intelligenceData = useMemo(() => ({
+    questions: filteredQuestions,
+    tests: filteredTests,
+  }), [filteredQuestions, filteredTests]);
 
   const charts = useMemo(() => [
+    // ── Core analytics ──────────────────────────────────────────────────────
     {
       id: 'topic-performance',
       title: 'Topic Performance',
@@ -1002,45 +725,55 @@ export default function Statistics() {
       fullscreenProps: { data: expandedHeatData },
       wide: true,
     },
-  ], [barData, expandedHeatData, filteredTests, groupLevel, heatData, lineData, showMovingAverage]);
-
-  const expandedChart = useMemo(() => {
-    const chart = charts.find(item => item.id === expandedChartId);
-    if (!chart) return null;
-    return {
-      ...chart,
-      props: {
-        ...chart.props,
-        ...(chart.fullscreenProps || {}),
-      },
-    };
-  }, [charts, expandedChartId]);
+    // ── Learning intelligence ────────────────────────────────────────────────
+    {
+      id: 'weakest-topics-trend',
+      title: 'Weakest Topics Trend',
+      purpose: 'Track how your lowest-scoring topics improve or decline over time with rolling averages.',
+      component: WeakestTopicsTrend,
+      props: { data: intelligenceData },
+      wide: true,
+    },
+    {
+      id: 'recommended-focus',
+      title: 'Recommended Focus Areas',
+      purpose: 'Prioritised study suggestions scored by accuracy, decay, confidence, streak gaps, mistakes, and velocity.',
+      component: RecommendedFocusAreas,
+      props: { data: intelligenceData },
+    },
+    {
+      id: 'study-streak',
+      title: 'Study Streak Heatmap',
+      purpose: 'GitHub-style activity calendar showing daily study intensity, streaks, and consistency.',
+      component: StudyStreakHeatmap,
+      props: { data: intelligenceData },
+      wide: true,
+    },
+    {
+      id: 'mistake-breakdown',
+      title: 'Mistake Category Breakdown',
+      purpose: 'Understand why you fail — conceptual gaps, careless errors, rushed answers, and more.',
+      component: MistakeCategoryBreakdown,
+      props: { data: intelligenceData },
+    },
+    {
+      id: 'knowledge-decay',
+      title: 'Knowledge Decay Analytics',
+      purpose: 'Ebbinghaus-based retention curves showing which topics need urgent review before they fade.',
+      component: KnowledgeDecayAnalytics,
+      props: { data: intelligenceData },
+      wide: true,
+    },
+  ], [barData, expandedHeatData, filteredTests, groupLevel, heatData, intelligenceData, lineData, showMovingAverage]);
 
   const updateFilter = (key, value) => {
-    setFilters(prev => {
+    setFilters((prev) => {
       const next = { ...prev, [key]: value };
-      if (key === 'domain') {
-        next.section = '';
-        next.topic = '';
-      }
-      if (key === 'section') {
-        next.topic = '';
-      }
+      if (key === 'domain') { next.section = ''; next.topic = ''; }
+      if (key === 'section') { next.topic = ''; }
       return next;
     });
   };
-
-  const toggleCollapse = (id) => {
-    setCollapsedCharts(prev => {
-      const next = { ...prev, [id]: !prev[id] };
-      return next;
-    });
-    if (expandedChartId === id) {
-      setExpandedChartId(null);
-    }
-  };
-
-  const isCollapsed = (id) => !!collapsedCharts[id];
 
   if (error) {
     return (
@@ -1067,21 +800,21 @@ export default function Statistics() {
           <label style={styles.label}>Domain</label>
           <select value={filters.domain} onChange={(e) => updateFilter('domain', e.target.value)} style={styles.input}>
             <option value="">All domains</option>
-            {domainOptions.map(option => <option key={option} value={option}>{option}</option>)}
+            {domainOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </div>
         <div style={styles.field}>
           <label style={styles.label}>Section</label>
           <select value={filters.section} onChange={(e) => updateFilter('section', e.target.value)} style={styles.input}>
             <option value="">All sections</option>
-            {sectionOptions.map(option => <option key={option} value={option}>{option}</option>)}
+            {sectionOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </div>
         <div style={styles.field}>
           <label style={styles.label}>{filters.section ? 'Topic' : filters.domain ? 'Topic / Section' : 'Topic / Domain'}</label>
           <select value={filters.topic} onChange={(e) => updateFilter('topic', e.target.value)} style={styles.input}>
             <option value="">All topics</option>
-            {topicOptions.map(option => <option key={option} value={option}>{option}</option>)}
+            {topicOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </div>
         <div style={styles.field}>
@@ -1106,46 +839,63 @@ export default function Statistics() {
       ) : (
         <>
           <div style={styles.summaryRow}>
-            <div style={styles.summary}>
-              <div style={styles.summaryLabel}>Completed tests</div>
-              <div style={styles.summaryValue}>{filteredTests.length}</div>
-            </div>
-            <div style={styles.summary}>
-              <div style={styles.summaryLabel}>Questions analyzed</div>
-              <div style={styles.summaryValue}>{filteredQuestions.length}</div>
-            </div>
-            <div style={styles.summary}>
-              <div style={styles.summaryLabel}>Average score</div>
-              <div style={styles.summaryValue}>{filteredTests.length ? pct(avgScore) : '-'}</div>
-            </div>
-            <div style={styles.summary}>
-              <div style={styles.summaryLabel}>Needs attention</div>
-              <div style={styles.summaryValue}>{weakest}</div>
-            </div>
-            <div style={styles.summary}>
-              <div style={styles.summaryLabel}>Avg time/test</div>
-              <div style={styles.summaryValue}>{filteredTests.length ? `${Math.round(avgTime / 60)}m` : '-'}</div>
-            </div>
+            <div style={styles.summary}><div style={styles.summaryLabel}>Completed tests</div><div style={styles.summaryValue}>{filteredTests.length}</div></div>
+            <div style={styles.summary}><div style={styles.summaryLabel}>Questions analyzed</div><div style={styles.summaryValue}>{filteredQuestions.length}</div></div>
+            <div style={styles.summary}><div style={styles.summaryLabel}>Average score</div><div style={styles.summaryValue}>{filteredTests.length ? pct(avgScore) : '-'}</div></div>
+            <div style={styles.summary}><div style={styles.summaryLabel}>Needs attention</div><div style={styles.summaryValue}>{weakest}</div></div>
+            <div style={styles.summary}><div style={styles.summaryLabel}>Avg time/test</div><div style={styles.summaryValue}>{filteredTests.length ? `${Math.round(avgTime / 60)}m` : '-'}</div></div>
           </div>
 
-          <div style={styles.grid}>
-            {charts.map(chart => (
-              <ChartPanel
-                key={chart.id}
-                id={chart.id}
-                title={chart.title}
-                purpose={chart.purpose}
-                collapsed={isCollapsed(chart.id)}
-                wide={chart.wide}
-                onToggleCollapse={toggleCollapse}
-                onExpand={setExpandedChartId}
-              >
-                <ChartRenderer chart={chart} />
-              </ChartPanel>
+          {/* ↓ All chart rendering is now handled by ChartGrid ↓ */}
+          <div style={styles.summaryRow}>
+            {insightPipeline.summaryCards.map((card) => (
+              <div key={card.key} style={styles.summary}>
+                <div style={styles.summaryLabel}>{card.title}</div>
+                <div style={styles.summaryValue}>{card.value || '-'}</div>
+                <div style={styles.insightMuted}>{card.label || 'Not enough data'}</div>
+              </div>
             ))}
           </div>
 
-          <ChartModal chart={expandedChart} onClose={() => setExpandedChartId(null)} />
+          <section style={styles.insightPanel}>
+            <div>
+              <h2 style={styles.insightTitle}>AI Learning Insights</h2>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
+              {insightPipeline.insights.length ? (
+                <ul style={{ ...styles.insightList, ...styles.insightText }}>
+                  {insightPipeline.insights.map((insight) => (
+                    <li key={insight}>{insight}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div style={styles.insightMuted}>Complete more tests to generate personalized learning insights.</div>
+              )}
+              <div style={styles.trendGrid}>
+                {insightPipeline.trends.length ? insightPipeline.trends.map((trend) => (
+                  <div key={trend.type} style={{
+                    ...styles.trendCard,
+                    borderColor: trend.tone === 'risk' ? COLORS.error : trend.tone === 'positive' ? COLORS.success : COLORS.border,
+                  }}>
+                    <div style={{
+                      ...styles.trendTitle,
+                      color: trend.tone === 'risk' ? COLORS.error : trend.tone === 'positive' ? COLORS.success : COLORS.text,
+                    }}>
+                      {trend.title}
+                    </div>
+                    <div style={styles.insightMuted}>{trend.text}</div>
+                  </div>
+                )) : (
+                  <div style={styles.trendCard}>
+                    <div style={styles.trendTitle}>Trend detection</div>
+                    <div style={styles.insightMuted}>No sustained improvement, plateau, regression, or burnout pattern detected yet.</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <ChartGrid charts={charts} />
         </>
       )}
     </div>

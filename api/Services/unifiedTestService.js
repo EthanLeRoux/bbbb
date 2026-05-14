@@ -2,6 +2,8 @@
 
 const { getFirestore } = require('firebase-admin/firestore');
 const SpacedRepetitionService = require('./spacedRepetitionService');
+const { QuestionAttemptModel } = require('../models/QuestionAttempt');
+const MistakeClassifier        = require('./mistakeClassifier');
 
 const COLLECTION_ATTEMPTS = 'attempts';
 
@@ -94,6 +96,41 @@ async submitAttempt({
 
     const doc = await docRef.get();
     const attempt = this._hydrate(doc.id, doc.data());
+
+    // ── Normalised question-level analytics (non-fatal) ────────────────────
+    // Resolve human-readable names from the test document where possible.
+    try {
+      let materialName = null;
+      let domainName   = null;
+      let sectionName  = null;
+      let testDifficulty = null;
+
+      try {
+        const Test = require('../models/Test');
+        const test = testId ? await Test.findById(testId) : null;
+        if (test) {
+          materialName   = test.name       || null;
+          domainName     = test.domain     || null;
+          sectionName    = test.section    || null;
+          testDifficulty = test.difficulty || null;
+        }
+      } catch (_) { /* non-fatal */ }
+
+      await this._persistQuestionAttempts({
+        attemptId:    attempt.id,
+        testId,
+        domainId:     domainId  || null,
+        sectionId:    sectionId || null,
+        materialId:   vaultId   || testId || null,
+        domainName,
+        sectionName,
+        materialName,
+        perQuestionResults,
+        timings,
+        difficulty:   testDifficulty,
+        answeredAt:   now,
+      });
+    } catch (_) { /* already swallowed inside _persistQuestionAttempts */ }
 
     // ── Spaced-repetition side-effect (non-fatal) ──────────────────────────
     // Write SR stats whenever we have enough context. Mirrors the logic in
@@ -462,6 +499,97 @@ async submitAttempt({
 
   _hydrate(id, data) {
     return { id, ...data };
+  }
+
+  // -----------------------------------------------
+  // PERSIST QUESTION-LEVEL ANALYTICS (non-fatal)
+  // -----------------------------------------------
+
+  /**
+   * Build and batch-write normalised question_attempt records from the data
+   * already present in a completed test attempt.
+   *
+   * Called as a non-fatal side-effect of submitAttempt() so that existing
+   * behaviour is never broken if this write fails.
+   *
+   * @param {Object} params
+   * @param {string}  params.attemptId
+   * @param {string}  params.testId
+   * @param {string}  [params.domainId]
+   * @param {string}  [params.sectionId]
+   * @param {string}  [params.materialId]      defaults to testId
+   * @param {string}  [params.domainName]
+   * @param {string}  [params.sectionName]
+   * @param {string}  [params.materialName]    test name or vault title
+   * @param {Object}  [params.perQuestionResults]  { q0: { correct, score, … }, … }
+   * @param {Object}  [params.timings]             { q0: seconds, … }
+   * @param {string}  [params.difficulty]          test-level fallback difficulty
+   * @param {Date}    [params.answeredAt]
+   * @param {string}  [params.userId]
+   */
+  async _persistQuestionAttempts({
+    attemptId,
+    testId,
+    domainId   = null,
+    sectionId  = null,
+    materialId = null,
+    domainName  = null,
+    sectionName = null,
+    materialName = null,
+    perQuestionResults = {},
+    timings = {},
+    difficulty = null,
+    answeredAt = new Date(),
+    userId = null,
+  }) {
+    try {
+      const questionKeys = Object.keys(perQuestionResults);
+      if (questionKeys.length === 0) return;
+
+      const records = questionKeys.map(qKey => {
+        const qResult = perQuestionResults[qKey] || {};
+
+        const correct          = Boolean(qResult.correct ?? qResult.isCorrect ?? false);
+        const score            = qResult.score      ?? (correct ? 100 : 0);
+        const qDifficulty      = qResult.difficulty ?? difficulty ?? null;
+        const timeSpentSeconds = Number(timings[qKey] ?? qResult.timeSpent ?? qResult.timeSpentSeconds ?? 0);
+        const confidence       = qResult.confidence ?? null;
+
+        // Classify mistake (returns null for correct answers)
+        const mistakeType = MistakeClassifier.classify({
+          correct,
+          timeSpentSeconds,
+          difficulty: qDifficulty,
+          confidence,
+          score,
+        });
+
+        return {
+          userId,
+          attemptId,
+          questionId:   qKey,
+          domainId:     domainId   || null,
+          sectionId:    sectionId  || null,
+          materialId:   materialId || testId || null,
+          domainName:   domainName  || null,
+          sectionName:  sectionName || null,
+          materialName: materialName || null,
+          correct,
+          score,
+          difficulty:       qDifficulty,
+          timeSpentSeconds,
+          confidence,
+          mistakeType,
+          answeredAt,
+        };
+      });
+
+      await QuestionAttemptModel.createBatch(records);
+      console.log(`[UnifiedTestService] Persisted ${records.length} question_attempt records for attempt ${attemptId}`);
+    } catch (err) {
+      // Non-fatal — must never break existing test-submission flow
+      console.error('[UnifiedTestService] _persistQuestionAttempts failed (non-fatal):', err.message);
+    }
   }
 }
 

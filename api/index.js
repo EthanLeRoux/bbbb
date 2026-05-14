@@ -23,12 +23,14 @@ const attemptRoutes = require('./Routes/attemptRoutes');
 const spacedRepetitionRoutes = require('./Routes/spacedRepetitionRoutes');
 const vaultSpacedRepetitionRoutes = require('./Routes/vaultSpacedRepetitionRoutes');
 const dailyReviewScheduleRoutes = require('./Routes/dailyReviewScheduleRoutes');
+const analyticsRoutes = require('./Routes/analyticsRoutes');
 app.use('/api/vault', vaultRoutes);
 app.use('/api/tests', testRoutes);
 app.use('/api/attempt', attemptRoutes);
 app.use('/api/spaced-repetition', spacedRepetitionRoutes);
 app.use('/api/vault-learning', vaultSpacedRepetitionRoutes);
 app.use('/api/review-schedule', dailyReviewScheduleRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 
 // ── Health check ──────────────────────────────────────────────────────────────
