@@ -38,8 +38,10 @@ class TestModel {
       let sourceNotes = [];
       if (testData.sourceNotes && Array.isArray(testData.sourceNotes)) {
         sourceNotes = testData.sourceNotes.map(note => ({
-          noteId: note.id || '',
-          title: note.title || 'Untitled note',
+          id: note.id || note.noteId || '',
+          noteId: note.id || note.noteId || '',
+          title: note.title || note.noteTitle || 'Untitled note',
+          noteTitle: note.title || note.noteTitle || 'Untitled note',
           type: note.type || '',
           domain: note.domain || '',
           section: note.section || '',

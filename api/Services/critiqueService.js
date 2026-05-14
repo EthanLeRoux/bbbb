@@ -90,12 +90,16 @@ class CritiqueService {
       const result = attempt.perQuestionResults[questionId];
       
       if (result && !result.correct) {
+        const sourceNote = this._findSourceNote(test, question);
         incorrect.push({
           questionId,
           question: question.question,
           userAnswer: result.userAnswer,
           expectedAnswer: result.expectedAnswer,
-          sourceConcept: question.sourceConcept,
+          sourceConcept: question.sourceConcept || result.sourceConcept || '',
+          sourceNoteId: question.sourceNoteId || result.sourceNoteId || sourceNote?.noteId || sourceNote?.id || null,
+          sourceNoteTitle: question.sourceNoteTitle || sourceNote?.noteTitle || sourceNote?.title || question.sourceConcept || '',
+          sourceNoteTopic: question.sourceNoteTopic || sourceNote?.topic || '',
           timing: result.timing
         });
       }
@@ -137,13 +141,13 @@ class CritiqueService {
         expectedAnswer: incorrect.expectedAnswer,
         critique: 'Your answer differs from the expected answer.',
         explanation: `The correct answer is: "${incorrect.expectedAnswer}"`,
-        improvement: `Review the concept of ${incorrect.sourceConcept} and try to understand the key terminology.`,
+        improvement: `Review ${incorrect.sourceNoteTitle || incorrect.sourceConcept} and try to understand the key terminology.`,
         confidence: 'low'
       };
     });
 
     // Generate overall analysis
-    const concepts = [...new Set(incorrectAnswers.map(a => a.sourceConcept))];
+    const concepts = [...new Set(incorrectAnswers.map(a => a.sourceNoteTitle || a.sourceConcept).filter(Boolean))];
     critiques.overallWeaknesses = concepts.map(concept => `Difficulty with ${concept} concepts`);
     critiques.studyRecommendations = concepts.map(concept => `Focus study on ${concept} topics`);
     critiques.strengths = ['Attempted all questions', 'Showed effort in responses'];
@@ -172,6 +176,9 @@ class CritiqueService {
         question: incorrect.question,
         userAnswer: incorrect.userAnswer,
         expectedAnswer: incorrect.expectedAnswer,
+        sourceNoteId: incorrect.sourceNoteId,
+        sourceNoteTitle: incorrect.sourceNoteTitle,
+        sourceNoteTopic: incorrect.sourceNoteTopic,
         critique: response.critique || 'No critique available',
         explanation: response.explanation || 'No explanation available',
         improvement: response.improvement || 'No improvement suggestions available',
@@ -187,6 +194,9 @@ class CritiqueService {
         question: incorrect.question,
         userAnswer: incorrect.userAnswer,
         expectedAnswer: incorrect.expectedAnswer,
+        sourceNoteId: incorrect.sourceNoteId,
+        sourceNoteTitle: incorrect.sourceNoteTitle,
+        sourceNoteTopic: incorrect.sourceNoteTopic,
         critique: 'Unable to generate detailed critique due to technical issues.',
         explanation: `Your answer "${incorrect.userAnswer}" differs from the expected answer "${incorrect.expectedAnswer}".`,
         improvement: 'Review the source material and try to understand the key concepts better.',
@@ -221,7 +231,7 @@ class CritiqueService {
       console.error('[CritiqueService] Overall analysis generation failed:', error);
       
       // Fallback analysis
-      const concepts = [...new Set(incorrectAnswers.map(a => a.sourceConcept))];
+      const concepts = [...new Set(incorrectAnswers.map(a => a.sourceNoteTitle || a.sourceConcept).filter(Boolean))];
       
       return {
         weaknesses: concepts.map(concept => `Difficulty with ${concept} concepts`),
@@ -244,6 +254,8 @@ Question: "${incorrect.question}"
 User's Answer: "${incorrect.userAnswer}"
 Expected Answer: "${incorrect.expectedAnswer}"
 Source Concept: "${incorrect.sourceConcept}"
+Source Note: "${incorrect.sourceNoteTitle || 'Unknown'}" (${incorrect.sourceNoteId || 'no note id'})
+Source Topic: "${incorrect.sourceNoteTopic || 'Unknown'}"
 
 Please provide a JSON response with the following fields:
 {
@@ -267,7 +279,9 @@ Keep responses concise but helpful. Focus on learning rather than just pointing 
     const incorrectSummary = incorrectAnswers.map((answer, index) => 
       `${index + 1}. Question: "${answer.question.substring(0, 100)}..." 
        User Answer: "${answer.userAnswer}"
-       Concept: "${answer.sourceConcept}"`
+       Concept: "${answer.sourceConcept}"
+       Source Note: "${answer.sourceNoteTitle || 'Unknown'}" (${answer.sourceNoteId || 'no note id'})
+       Topic: "${answer.sourceNoteTopic || 'Unknown'}"`
     ).join('\n');
 
     return `As an educational assessment expert, analyze these incorrect answers from a test and provide overall learning guidance.
@@ -287,6 +301,26 @@ Please provide a JSON response with the following fields:
 }
 
 Focus on actionable study advice and be encouraging while identifying areas for improvement.`;
+  }
+
+  _findSourceNote(test, question) {
+    if (!test?.sourceNotes?.length) return null;
+
+    const sourceNoteId = question.sourceNoteId;
+    if (sourceNoteId) {
+      const byId = test.sourceNotes.find(note =>
+        note.noteId === sourceNoteId ||
+        note.id === sourceNoteId
+      );
+      if (byId) return byId;
+    }
+
+    const sourceTitle = (question.sourceNoteTitle || question.sourceConcept || '').toLowerCase();
+    if (!sourceTitle) return null;
+
+    return test.sourceNotes.find(note =>
+      (note.noteTitle || note.title || '').toLowerCase() === sourceTitle
+    ) || null;
   }
 }
 

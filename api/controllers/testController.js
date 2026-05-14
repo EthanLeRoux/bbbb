@@ -55,7 +55,7 @@ class TestController {
         });
       }
 
-      if (error.message.includes('required') || error.message.includes('invalid')) {
+      if (error.message.includes('required') || error.message.includes('invalid') || error.message.includes('could not be linked')) {
         return res.status(400).json({
           success: false,
           error: error.message

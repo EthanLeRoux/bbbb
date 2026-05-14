@@ -321,6 +321,28 @@ class TestGenerationService {
       ];
     }
 
+    const resolvedQuestions = aiResponse.shortAnswerQuestions.map(q => ({
+      ...q,
+      _sourceNote: this._resolveQuestionSourceNote(q, notes),
+    }));
+
+    const unresolvedCount = resolvedQuestions.filter(q => !q._sourceNote).length;
+    if (unresolvedCount > 0) {
+      console.warn(`[TestGeneration] ${unresolvedCount} generated question(s) could not be resolved to a vault note`);
+    }
+
+    sourceNotes = [
+      ...new Map(
+        resolvedQuestions
+          .filter(q => q._sourceNote)
+          .map(q => [q._sourceNote.id, q._sourceNote])
+      ).values(),
+    ];
+
+    if (sourceNotes.length === 0) {
+      throw new Error('Generated questions could not be linked to any vault source notes');
+    }
+
     console.log(
       `[TestGeneration] Resolved ${sourceNotes.length} source note(s) from ${aiResponse.shortAnswerQuestions.length} question(s)`
     );
@@ -331,11 +353,13 @@ class TestGenerationService {
       topic: topicForStorage,
       difficulty: aiResponse.difficulty,
       name,
-      shortAnswerQuestions: aiResponse.shortAnswerQuestions.map(q => ({
+      shortAnswerQuestions: resolvedQuestions.map(q => ({
         question:     q.question.trim(),
         answer:       q.answer.trim(),
-        sourceConcept: q.sourceConcept?.trim() || '',
-        sourceNoteId:  q.sourceNoteId?.trim()  || null,
+        sourceConcept: q._sourceNote?.title || q.sourceConcept?.trim() || '',
+        sourceNoteId:  q._sourceNote?.id || null,
+        sourceNoteTitle: q._sourceNote?.title || q.sourceConcept?.trim() || '',
+        sourceNoteTopic: q._sourceNote?.topic || '',
       })),
       sourceNotes,
       createdAt: new Date(),
@@ -343,6 +367,30 @@ class TestGenerationService {
   }
 
   // ─── Question format checks ──────────────────────────────────────────────────
+
+  _resolveQuestionSourceNote(question, notes) {
+    const requestedId = question.sourceNoteId?.trim();
+    if (requestedId) {
+      const exact = notes.find(note => note.id === requestedId);
+      if (exact) return exact;
+    }
+
+    const concept = question.sourceConcept?.trim().toLowerCase();
+    if (!concept) return null;
+
+    return notes.find(note => {
+      const title = (note.title || '').toLowerCase();
+      const id = (note.id || '').toLowerCase();
+      return title === concept || id === concept;
+    }) || notes.find(note => {
+      const title = (note.title || '').toLowerCase();
+      const id = (note.id || '').toLowerCase();
+      return title.includes(concept) ||
+        concept.includes(title) ||
+        id.includes(concept) ||
+        concept.includes(id);
+    }) || null;
+  }
 
   _isInvalidShortAnswerQuestion(question) {
     const { question: qText, answer } = question;

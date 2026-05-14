@@ -114,7 +114,7 @@ class AttemptService {
 
       if (questionResults) {
         // New format: use provided question results
-        scoringResults = this._calculateScoringFromResults(questionResults);
+        scoringResults = this._calculateScoringFromResults(questionResults, test);
         processedQuestionResults = await this._processQuestionResults(questionResults, test, attemptId);
       } else {
         // Legacy format: calculate from answers and timings
@@ -370,6 +370,10 @@ class AttemptService {
         userAnswer: userAnswer,
         timing: parseFloat(timing) || 0,
         question: question.question,
+        sourceConcept: question.sourceConcept || '',
+        sourceNoteId: question.sourceNoteId || null,
+        sourceNoteTitle: question.sourceNoteTitle || question.sourceConcept || '',
+        sourceNoteTopic: question.sourceNoteTopic || '',
         aiScore: scoringResult.score,
         confidence: scoringResult.confidence,
         evaluation: scoringResult.evaluation,
@@ -546,7 +550,7 @@ class AttemptService {
    * @returns {Object} Scoring results
    * @private
    */
-  _calculateScoringFromResults(questionResults) {
+  _calculateScoringFromResults(questionResults, test = null) {
     const correctCount = questionResults.filter(r => r.isCorrect).length;
     const totalCount = questionResults.length;
     const totalTime = questionResults.reduce((sum, r) => sum + (r.timeSpent || 0), 0);
@@ -555,12 +559,18 @@ class AttemptService {
     // Create perQuestionResults for backward compatibility
     const perQuestionResults = {};
     questionResults.forEach(result => {
+      const testQuestion = this._findTestQuestionForResult(result, test);
       perQuestionResults[result.questionId] = {
         correct: result.isCorrect,
         timing: result.timeSpent,
-        questionText: result.questionText || '',
+        question: result.questionText || testQuestion?.question || '',
+        questionText: result.questionText || testQuestion?.question || '',
         userAnswer: result.userAnswer || '',
-        expectedAnswer: result.expectedAnswer || '',
+        expectedAnswer: result.expectedAnswer || testQuestion?.answer || '',
+        sourceConcept: testQuestion?.sourceConcept || result.conceptId || '',
+        sourceNoteId: testQuestion?.sourceNoteId || result.sourceNoteId || null,
+        sourceNoteTitle: testQuestion?.sourceNoteTitle || testQuestion?.sourceConcept || '',
+        sourceNoteTopic: testQuestion?.sourceNoteTopic || '',
         confidence: result.confidence || null
       };
     });
@@ -572,6 +582,22 @@ class AttemptService {
       totalTime,
       perQuestionResults
     };
+  }
+
+  _findTestQuestionForResult(result, test) {
+    if (!test?.shortAnswerQuestions?.length) return null;
+
+    const indexMatch = `${result.questionId || ''}`.match(/^q(\d+)$/);
+    if (indexMatch) {
+      const byIndex = test.shortAnswerQuestions[Number(indexMatch[1])];
+      if (byIndex) return byIndex;
+    }
+
+    return test.shortAnswerQuestions.find(q =>
+      q.question === result.questionText ||
+      q.id === result.questionId ||
+      q.sourceNoteId === result.sourceNoteId
+    ) || null;
   }
 
   /**
@@ -587,16 +613,18 @@ class AttemptService {
 
     for (const result of questionResults) {
       // Find corresponding question in test to get additional metadata
-      const testQuestion = test.shortAnswerQuestions?.find(q => 
-        q.question === result.questionText || q.id === result.questionId
-      );
+      const testQuestion = this._findTestQuestionForResult(result, test);
 
       const processedResult = {
         attemptId,
         testId: test.id,
         questionId: result.questionId,
-        conceptId: result.conceptId || testQuestion?.sourceConcept || null,
-        vaultId: test.vaultId || null,
+        conceptId: result.conceptId || testQuestion?.sourceNoteId || testQuestion?.sourceConcept || null,
+        sourceConcept: testQuestion?.sourceConcept || result.conceptId || '',
+        sourceNoteId: testQuestion?.sourceNoteId || result.sourceNoteId || null,
+        sourceNoteTitle: testQuestion?.sourceNoteTitle || testQuestion?.sourceConcept || '',
+        sourceNoteTopic: testQuestion?.sourceNoteTopic || '',
+        vaultId: testQuestion?.sourceNoteId || test.vaultId || null,
         domain: test.domain,
         section: test.section,
         questionText: result.questionText || testQuestion?.question || '',
@@ -680,8 +708,12 @@ class AttemptService {
         attemptId: scoringResults.attemptId || null,
         testId: test.id,
         questionId: questionId,
-        conceptId: question.sourceConcept || null,
-        vaultId: test.vaultId || null,
+        conceptId: question.sourceNoteId || question.sourceConcept || null,
+        sourceConcept: question.sourceConcept || '',
+        sourceNoteId: question.sourceNoteId || null,
+        sourceNoteTitle: question.sourceNoteTitle || question.sourceConcept || '',
+        sourceNoteTopic: question.sourceNoteTopic || '',
+        vaultId: question.sourceNoteId || test.vaultId || null,
         domain: test.domain,
         section: test.section,
         questionText: question.question,
