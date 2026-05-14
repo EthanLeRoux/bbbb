@@ -12,6 +12,7 @@ import AttemptDetail from '../pages/AttemptDetail';
 import Statistics from '../pages/Statistics';
 import VaultLearningPage from '../pages/VaultLearningPage';
 import SpacedRepetitionDue from '../pages/SpacedRepetitionDue';
+import CardBrowser from '../pages/CardBrowser';
 
 function Layout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -56,4 +57,5 @@ export {
   Statistics,
   VaultLearningPage,
   SpacedRepetitionDue,
+  CardBrowser,
 };

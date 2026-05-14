@@ -100,6 +100,24 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         >
           {isCollapsed ? 'V' : LABELS.nav.vault}
         </NavLink>
+
+        <NavLink 
+          to="/cards" 
+          style={({ isActive }) => ({
+            color: isActive ? COLORS.accent : COLORS.text,
+            textDecoration: 'none',
+            fontSize: SIZE.sm,
+            fontFamily: FONTS.mono,
+            padding: `${SPACE.xs}px ${SPACE.sm}px`,
+            borderRadius: 4,
+            transition: 'color 0.2s',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+          })}
+          title={isCollapsed ? 'Cards' : ''}
+        >
+          {isCollapsed ? 'C' : 'Card Browser'}
+        </NavLink>
         
         <NavLink 
           to="/vault-learning" 

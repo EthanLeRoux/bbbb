@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import VaultTestComponent from '../components/VaultTestComponent';
 import TestResubmissionDashboard from '../components/TestResubmissionDashboard';
 import VaultItemStats from '../components/VaultItemStats';
-import NoteStatsPanel from '../components/NoteStatsPanel';
 import { getAllNotes } from '../api/vault';
 import { COLORS, FONTS, SIZE, SPACE } from '../constants';
 
@@ -37,106 +36,10 @@ const styles = {
     flexWrap: 'wrap',
     gap: SPACE.md,
   },
-  browserLayout: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(260px, 360px) 1fr',
-    gap: SPACE.lg,
-    alignItems: 'start',
-  },
-  searchInput: {
-    width: '100%',
-    padding: `${SPACE.sm}px ${SPACE.md}px`,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.sm,
-    backgroundColor: COLORS.surface,
-    color: COLORS.text,
-    outline: 'none',
-    marginBottom: SPACE.md,
-  },
-  cardList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: SPACE.xs,
-    maxHeight: '70vh',
-    overflowY: 'auto',
-  },
-  cardRow: {
-    width: '100%',
-    textAlign: 'left',
-    backgroundColor: COLORS.surface,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-    padding: SPACE.sm,
-    color: COLORS.text,
-    cursor: 'pointer',
-  },
-  cardRowActive: {
-    borderColor: COLORS.accent,
-    backgroundColor: `${COLORS.accent}12`,
-  },
-  cardTitle: {
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.sm,
-    fontWeight: 600,
-    marginBottom: SPACE.xs,
-  },
   cardMeta: {
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
     color: COLORS.muted,
-  },
-  detailPanel: {
-    backgroundColor: COLORS.surface,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 8,
-    padding: SPACE.lg,
-  },
-  detailTitle: {
-    fontFamily: FONTS.serif,
-    fontSize: SIZE.xl,
-    color: COLORS.text,
-    margin: 0,
-    marginBottom: SPACE.sm,
-  },
-  infoGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: SPACE.sm,
-    marginTop: SPACE.md,
-    marginBottom: SPACE.lg,
-  },
-  infoItem: {
-    backgroundColor: COLORS.bg,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-    padding: SPACE.sm,
-  },
-  infoLabel: {
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.xs,
-    color: COLORS.muted,
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.sm,
-    color: COLORS.text,
-    overflowWrap: 'anywhere',
-  },
-  contentBox: {
-    backgroundColor: COLORS.bg,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 6,
-    padding: SPACE.md,
-    whiteSpace: 'pre-wrap',
-    lineHeight: 1.6,
-    fontFamily: FONTS.mono,
-    fontSize: SIZE.sm,
-    color: COLORS.text,
-    maxHeight: 420,
-    overflowY: 'auto',
   },
   vaultSelector: {
     display: 'flex',
@@ -204,9 +107,8 @@ const styles = {
 };
 
 export default function VaultLearningPage() {
-  const [activeTab, setActiveTab] = useState('card');
+  const [activeTab, setActiveTab] = useState('test');
   const [selectedVaultId, setSelectedVaultId] = useState(null);
-  const [search, setSearch] = useState('');
 
   // Fetch all vault notes once
   const { data: allNotes = [], isLoading: notesLoading, error: notesError } = useQuery({
@@ -239,21 +141,7 @@ export default function VaultLearningPage() {
   };
 
   const selectedVault = allNotes.find(n => n.vaultId === selectedVaultId);
-  const filteredNotes = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return allNotes;
-    return allNotes.filter(note => [
-      note.title,
-      note.id,
-      note.domain,
-      note.section,
-      note.topic,
-      ...(Array.isArray(note.tags) ? note.tags : []),
-    ].filter(Boolean).join(' ').toLowerCase().includes(term));
-  }, [allNotes, search]);
-
   const tabs = [
-    { id: 'card', label: 'Card Browser' },
     { id: 'test', label: 'Take Test' },
     { id: 'resubmit', label: 'Resubmit Tests' },
     { id: 'stats', label: 'Statistics' },
@@ -261,83 +149,6 @@ export default function VaultLearningPage() {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'card':
-        return (
-          <div style={styles.browserLayout}>
-            <div>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search cards, topics, tags..."
-                style={styles.searchInput}
-              />
-              <div style={styles.cardList}>
-                {filteredNotes.map(note => (
-                  <button
-                    key={note.vaultId}
-                    type="button"
-                    style={{
-                      ...styles.cardRow,
-                      ...(selectedVaultId === note.vaultId ? styles.cardRowActive : {}),
-                    }}
-                    onClick={() => setSelectedVaultId(note.vaultId)}
-                  >
-                    <div style={styles.cardTitle}>{note.title}</div>
-                    <div style={styles.cardMeta}>
-                      {[note.domain, note.section, note.topic].filter(Boolean).join(' / ')}
-                    </div>
-                  </button>
-                ))}
-                {!notesLoading && filteredNotes.length === 0 && (
-                  <div style={styles.loadingState}>No cards match that search.</div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              {selectedVault ? (
-                <div>
-                  <div style={styles.detailPanel}>
-                    <h2 style={styles.detailTitle}>{selectedVault.title}</h2>
-                    <div style={styles.cardMeta}>{selectedVault.id}</div>
-
-                    <div style={styles.infoGrid}>
-                      {[
-                        ['Domain', selectedVault.domain],
-                        ['Section', selectedVault.section],
-                        ['Topic', selectedVault.topic],
-                        ['Type', selectedVault.type],
-                        ['Source', selectedVault.source],
-                        ['Created', selectedVault.created],
-                        ['Updated', selectedVault.updated],
-                        ['File', selectedVault.fileName],
-                        ['Path', selectedVault.filePath],
-                        ['Tags', Array.isArray(selectedVault.tags) ? selectedVault.tags.join(', ') : selectedVault.tags],
-                      ].filter(([, value]) => value).map(([label, value]) => (
-                        <div key={label} style={styles.infoItem}>
-                          <div style={styles.infoLabel}>{label}</div>
-                          <div style={styles.infoValue}>{value}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={styles.contentBox}>
-                      {selectedVault.content || 'No note content available.'}
-                    </div>
-                  </div>
-
-                  <NoteStatsPanel noteId={selectedVault.vaultId} noteTitle={selectedVault.title} />
-                  <VaultItemStats vaultId={selectedVault.vaultId} />
-                </div>
-              ) : (
-                <div style={styles.loadingState}>
-                  {notesLoading ? 'Loading vault cards...' : 'Select a card to inspect it.'}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
       case 'test':
         if (!selectedVaultId) {
           return (
@@ -393,7 +204,7 @@ export default function VaultLearningPage() {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Vault Learning</h1>
-        <p style={styles.subtitle}>Review calendar, card browser, practice, and stats</p>
+        <p style={styles.subtitle}>Practice, resubmit tests, and inspect learning stats</p>
       </div>
 
       {/* Controls: vault selector for tabs that need it */}
