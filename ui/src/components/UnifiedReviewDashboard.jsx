@@ -31,11 +31,41 @@ const styles = {
     flexWrap: 'wrap',
     gap: SPACE.sm,
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: SPACE.lg,
     padding: SPACE.md,
     backgroundColor: COLORS.surface,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 8,
+  },
+  controlGroup: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: SPACE.sm,
+    alignItems: 'center',
+  },
+  tabs: {
+    display: 'inline-grid',
+    gridTemplateColumns: 'repeat(3, minmax(72px, 1fr))',
+    gap: 2,
+    padding: 2,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+  },
+  tab: {
+    border: 0,
+    borderRadius: 6,
+    padding: `${SPACE.xs}px ${SPACE.md}px`,
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.xs,
+    color: COLORS.muted,
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+  },
+  tabActive: {
+    color: COLORS.bg,
+    backgroundColor: COLORS.accent,
   },
   select: {
     padding: `${SPACE.xs}px ${SPACE.sm}px`,
@@ -81,66 +111,125 @@ const styles = {
     marginBottom: SPACE.xl,
   },
   sectionTitle: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: SPACE.md,
     fontFamily: FONTS.mono,
     fontSize: SIZE.md,
     color: COLORS.text,
-    marginBottom: SPACE.md,
+    margin: `0 0 ${SPACE.md}px`,
   },
-  calendar: {
+  sectionHint: {
+    fontSize: SIZE.xs,
+    color: COLORS.muted,
+    fontWeight: 400,
+  },
+  dayPanel: {
+    display: 'grid',
+    gap: SPACE.md,
+  },
+  weekGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, minmax(120px, 1fr))',
+    gap: SPACE.sm,
+    overflowX: 'auto',
+    paddingBottom: SPACE.xs,
+  },
+  monthGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, minmax(112px, 1fr))',
+    gap: SPACE.xs,
+    overflowX: 'auto',
+    paddingBottom: SPACE.xs,
+  },
+  weekdayHeader: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.xs,
+    color: COLORS.muted,
+    padding: `${SPACE.xs}px ${SPACE.sm}px`,
+  },
+  dayCell: {
+    minHeight: 150,
+    backgroundColor: COLORS.surface,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    padding: SPACE.sm,
     display: 'flex',
     flexDirection: 'column',
-    gap: SPACE.md,
+    gap: SPACE.sm,
   },
-  dayGroup: {
-    display: 'grid',
-    gridTemplateColumns: '120px 1fr',
-    gap: SPACE.md,
-    paddingBottom: SPACE.md,
-    borderBottom: `1px solid ${COLORS.border}`,
+  monthCell: {
+    minHeight: 132,
   },
-  dayLabel: {
+  blankCell: {
+    minHeight: 132,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    opacity: 0.35,
+  },
+  todayCell: {
+    borderColor: COLORS.accent,
+    boxShadow: `inset 0 0 0 1px ${COLORS.accent}`,
+  },
+  cellHeader: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: SPACE.sm,
     fontFamily: FONTS.mono,
-    fontSize: SIZE.sm,
     color: COLORS.text,
   },
-  dayCount: {
-    display: 'block',
-    color: COLORS.muted,
+  cellDayName: {
     fontSize: SIZE.xs,
-    marginTop: 2,
+    color: COLORS.muted,
   },
-  list: {
+  cellDate: {
+    fontSize: SIZE.md,
+    fontWeight: 700,
+  },
+  cellCount: {
+    fontSize: SIZE.xs,
+    color: COLORS.muted,
+  },
+  cardList: {
     display: 'flex',
     flexDirection: 'column',
     gap: SPACE.sm,
   },
   card: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bg,
     border: `1px solid ${COLORS.border}`,
     borderLeft: '3px solid transparent',
     borderRadius: 8,
-    padding: SPACE.md,
+    padding: SPACE.sm,
     display: 'grid',
-    gridTemplateColumns: '1fr auto',
-    gap: SPACE.md,
+    gap: SPACE.sm,
+  },
+  cardCompact: {
+    padding: SPACE.xs,
+    gap: SPACE.xs,
   },
   cardTitle: {
     fontFamily: FONTS.mono,
     fontSize: SIZE.sm,
     fontWeight: 600,
     color: COLORS.text,
-    marginBottom: SPACE.xs,
+    overflowWrap: 'anywhere',
+  },
+  cardTitleCompact: {
+    fontSize: SIZE.xs,
   },
   meta: {
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
     color: COLORS.muted,
+    overflowWrap: 'anywhere',
   },
   tagRow: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: SPACE.xs,
-    justifyContent: 'flex-end',
   },
   tag: {
     padding: `2px ${SPACE.sm}px`,
@@ -150,6 +239,11 @@ const styles = {
     fontSize: SIZE.xs,
     color: COLORS.text,
     whiteSpace: 'nowrap',
+  },
+  overflowNote: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.xs,
+    color: COLORS.muted,
   },
   empty: {
     padding: SPACE.xl,
@@ -178,35 +272,76 @@ function asArray(value) {
   return [];
 }
 
+function parseDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value?.toDate === 'function') {
+    const date = value.toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function scheduleDate(item) {
-  return item.nextReviewAt || item.reviewDate || item.dueAt || item.completedAt || item.updatedAt || item.createdAt || new Date().toISOString();
+  const value = item.nextReviewAt || item.reviewDate || item.dueAt || item.completedAt || item.updatedAt || item.createdAt;
+  return parseDate(value) || new Date();
 }
 
-function isPast(dateString) {
-  const date = new Date(dateString);
-  return !isNaN(date.getTime()) && date < new Date();
+function startOfDay(date) {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
 }
 
-function formatDay(dateString) {
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return 'Unscheduled';
+function endOfDay(date) {
+  const result = new Date(date);
+  result.setHours(23, 59, 59, 999);
+  return result;
+}
 
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function dateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function sameDay(a, b) {
+  return dateKey(a) === dateKey(b);
+}
+
+function formatDayLabel(date) {
   const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-  const sameDay = (a, b) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-
+  const tomorrow = addDays(today, 1);
   if (sameDay(date, today)) return 'Today';
   if (sameDay(date, tomorrow)) return 'Tomorrow';
-  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function sourceLabel(source) {
-  if (source === 'review-due') return 'Review Due';
-  return 'Spaced Repetition';
+function formatTime(date) {
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function statusLabel(status) {
+  if (status === 'overdue') return 'Overdue';
+  if (status === 'completed') return 'Completed';
+  if (status === 'upcoming') return 'Upcoming';
+  return 'Due';
+}
+
+function statusColor(status) {
+  if (status === 'overdue') return COLORS.error;
+  if (status === 'completed') return COLORS.success;
+  if (status === 'upcoming') return COLORS.accent;
+  return COLORS.diffMedium;
 }
 
 function itemTitle(item) {
@@ -228,18 +363,23 @@ function itemSection(item) {
   return item.vaultInfo?.section || item.section || item.sectionId || '';
 }
 
+function normalizeStatus(bucket, date) {
+  if (bucket === 'completed') return 'completed';
+  const todayStart = startOfDay(new Date());
+  if (date < todayStart) return 'overdue';
+  if (bucket === 'due') return 'due';
+  return 'upcoming';
+}
+
 function normalizeItems(data, source, bucket) {
   return asArray(data).map((item, index) => {
     const date = scheduleDate(item);
-    const status = bucket === 'completed'
-      ? 'completed'
-      : isPast(item.nextReviewAt || item.dueAt || item.reviewDate) ? 'overdue' : bucket;
 
     return {
       ...item,
       id: `${source}-${item.id || item.entityId || item.noteId || index}-${bucket}`,
       source,
-      status,
+      status: normalizeStatus(bucket, date),
       title: itemTitle(item),
       date,
       domain: itemDomain(item),
@@ -257,7 +397,7 @@ function dedupe(items) {
       item.entityType,
       item.entityId || item.noteId || item.vaultId || item.title,
       item.status,
-      item.date,
+      dateKey(item.date),
     ].join('|');
     if (seen.has(key)) return false;
     seen.add(key);
@@ -265,76 +405,211 @@ function dedupe(items) {
   });
 }
 
-function groupByDay(items) {
-  const groups = new Map();
-
-  items.forEach((item) => {
-    const date = new Date(item.date);
-    const key = isNaN(date.getTime())
-      ? 'unscheduled'
-      : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const group = groups.get(key) || {
-      key,
-      label: key === 'unscheduled' ? 'Unscheduled' : formatDay(item.date),
-      date,
-      items: [],
-    };
-    group.items.push(item);
+function groupByDate(items) {
+  return items.reduce((groups, item) => {
+    const key = dateKey(item.date);
+    const group = groups.get(key) || [];
+    group.push(item);
     groups.set(key, group);
-  });
-
-  return Array.from(groups.values()).sort((a, b) => {
-    if (a.key === 'unscheduled') return 1;
-    if (b.key === 'unscheduled') return -1;
-    return a.date - b.date;
-  });
+    return groups;
+  }, new Map());
 }
 
-function ReviewCard({ item }) {
-  const borderColor = item.status === 'overdue'
-    ? COLORS.error
-    : item.status === 'completed'
-      ? COLORS.success
-      : COLORS.accent;
+function sortByDate(items) {
+  return [...items].sort((a, b) => a.date - b.date);
+}
+
+function getWeekDays() {
+  const start = startOfDay(new Date());
+  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+}
+
+function getMonthCells() {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const cells = [];
+
+  for (let i = 0; i < monthStart.getDay(); i += 1) {
+    cells.push(null);
+  }
+
+  for (let day = 1; day <= monthEnd.getDate(); day += 1) {
+    cells.push(new Date(now.getFullYear(), now.getMonth(), day));
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  return cells;
+}
+
+function ReviewCard({ item, compact = false }) {
+  const color = statusColor(item.status);
   const path = [item.domain, item.section].filter(Boolean).join(' / ');
-  const date = new Date(item.date);
 
   return (
-    <div style={{ ...styles.card, borderLeftColor: borderColor }}>
+    <div style={{ ...styles.card, ...(compact ? styles.cardCompact : {}), borderLeftColor: color }}>
       <div>
-        <div style={styles.cardTitle}>{item.title}</div>
+        <div style={{ ...styles.cardTitle, ...(compact ? styles.cardTitleCompact : {}) }}>{item.title}</div>
         {path && <div style={styles.meta}>{path}</div>}
-        <div style={styles.meta}>
-          {isNaN(date.getTime()) ? 'No scheduled date' : date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-        </div>
+        <div style={styles.meta}>{formatTime(item.date)}</div>
       </div>
       <div style={styles.tagRow}>
-        <span style={styles.tag}>{sourceLabel(item.source)}</span>
-        <span style={{ ...styles.tag, borderColor, color: borderColor }}>{item.status}</span>
+        <span style={{ ...styles.tag, borderColor: color, color }}>{statusLabel(item.status)}</span>
         {item.priorityScore ? <span style={styles.tag}>Priority {Math.round(item.priorityScore)}</span> : null}
       </div>
     </div>
   );
 }
 
-function CalendarSection({ title, items }) {
+function EmptyState({ children = 'No reviews match the current filters.' }) {
+  return <div style={styles.empty}>{children}</div>;
+}
+
+function SectionTitle({ title, hint }) {
+  return (
+    <h2 style={styles.sectionTitle}>
+      <span>{title}</span>
+      {hint && <span style={styles.sectionHint}>{hint}</span>}
+    </h2>
+  );
+}
+
+function OverdueSection({ items }) {
   if (!items.length) return null;
-  const groups = groupByDay(items);
 
   return (
     <section style={styles.section}>
-      <h2 style={styles.sectionTitle}>{title} ({items.length})</h2>
-      <div style={styles.calendar}>
-        {groups.map((group) => (
-          <div key={group.key} style={styles.dayGroup}>
-            <div style={styles.dayLabel}>
-              {group.label}
-              <span style={styles.dayCount}>{group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div style={styles.list}>
-              {group.items.map((item) => <ReviewCard key={item.id} item={item} />)}
-            </div>
+      <SectionTitle title={`Overdue (${items.length})`} hint="Needs attention first" />
+      <div style={styles.cardList}>
+        {sortByDate(items).map((item) => <ReviewCard key={item.id} item={item} />)}
+      </div>
+    </section>
+  );
+}
+
+function CalendarDayCell({ date, items, month = false }) {
+  const sortedItems = sortByDate(items);
+  const visibleItems = month ? sortedItems.slice(0, 3) : sortedItems;
+  const remaining = sortedItems.length - visibleItems.length;
+
+  return (
+    <div style={{
+      ...styles.dayCell,
+      ...(month ? styles.monthCell : {}),
+      ...(sameDay(date, new Date()) ? styles.todayCell : {}),
+    }}>
+      <div style={styles.cellHeader}>
+        <div>
+          <div style={styles.cellDayName}>
+            {date.toLocaleDateString('en-US', { weekday: month ? 'short' : 'long' })}
           </div>
+          <div style={styles.cellDate}>{month ? date.getDate() : formatDayLabel(date)}</div>
+        </div>
+        <div style={styles.cellCount}>{items.length}</div>
+      </div>
+
+      {visibleItems.length ? (
+        <div style={styles.cardList}>
+          {visibleItems.map((item) => <ReviewCard key={item.id} item={item} compact={month} />)}
+          {remaining > 0 && <div style={styles.overflowNote}>+{remaining} more</div>}
+        </div>
+      ) : (
+        <div style={styles.meta}>Clear</div>
+      )}
+    </div>
+  );
+}
+
+function DayView({ items }) {
+  const todayItems = sortByDate(items.filter((item) => sameDay(item.date, new Date()) && item.status !== 'overdue'));
+  const dueToday = todayItems.filter((item) => item.status === 'due');
+  const upcomingToday = todayItems.filter((item) => item.status === 'upcoming');
+  const completedToday = todayItems.filter((item) => item.status === 'completed');
+
+  if (!todayItems.length) {
+    return <EmptyState>No reviews due today.</EmptyState>;
+  }
+
+  return (
+    <div style={styles.dayPanel}>
+      {dueToday.length > 0 && (
+        <section style={styles.section}>
+          <SectionTitle title={`Due Today (${dueToday.length})`} />
+          <div style={styles.cardList}>
+            {dueToday.map((item) => <ReviewCard key={item.id} item={item} />)}
+          </div>
+        </section>
+      )}
+
+      {upcomingToday.length > 0 && (
+        <section style={styles.section}>
+          <SectionTitle title={`Later Today (${upcomingToday.length})`} />
+          <div style={styles.cardList}>
+            {upcomingToday.map((item) => <ReviewCard key={item.id} item={item} />)}
+          </div>
+        </section>
+      )}
+
+      {completedToday.length > 0 && (
+        <section style={styles.section}>
+          <SectionTitle title={`Completed Today (${completedToday.length})`} />
+          <div style={styles.cardList}>
+            {completedToday.map((item) => <ReviewCard key={item.id} item={item} />)}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function WeekView({ items }) {
+  const days = getWeekDays();
+  const groups = groupByDate(items.filter((item) => {
+    const date = item.date;
+    return date >= days[0] && date <= endOfDay(days[6]) && item.status !== 'overdue';
+  }));
+
+  return (
+    <section style={styles.section}>
+      <SectionTitle title="Next 7 Days" hint={`${formatDayLabel(days[0])} - ${formatDayLabel(days[6])}`} />
+      <div style={styles.weekGrid}>
+        {days.map((day) => (
+          <CalendarDayCell key={dateKey(day)} date={day} items={groups.get(dateKey(day)) || []} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MonthView({ items }) {
+  const cells = getMonthCells();
+  const today = new Date();
+  const monthItems = items.filter((item) =>
+    item.status !== 'overdue' &&
+    item.date.getFullYear() === today.getFullYear() &&
+    item.date.getMonth() === today.getMonth()
+  );
+  const groups = groupByDate(monthItems);
+
+  return (
+    <section style={styles.section}>
+      <SectionTitle
+        title={today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        hint="Monthly review map"
+      />
+      <div style={styles.monthGrid}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+          <div key={day} style={styles.weekdayHeader}>{day}</div>
+        ))}
+        {cells.map((day, index) => (
+          day ? (
+            <CalendarDayCell key={dateKey(day)} date={day} items={groups.get(dateKey(day)) || []} month />
+          ) : (
+            <div key={`blank-${index}`} style={styles.blankCell} />
+          )
         ))}
       </div>
     </section>
@@ -342,13 +617,12 @@ function CalendarSection({ title, items }) {
 }
 
 export default function UnifiedReviewDashboard() {
-  const [timeRange, setTimeRange] = useState('week');
-  const [source, setSource] = useState('');
+  const [view, setView] = useState('week');
   const [domain, setDomain] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['unified-review-dashboard', timeRange],
+    queryKey: ['unified-review-dashboard'],
     queryFn: async () => {
       const [spaced, reviewDue] = await Promise.allSettled([
         getReviewSchedule(100),
@@ -377,16 +651,21 @@ export default function UnifiedReviewDashboard() {
   const domains = useMemo(() => Array.from(new Set(allItems.map(item => item.domain).filter(Boolean))).sort(), [allItems]);
 
   const filteredItems = useMemo(() => allItems.filter((item) => {
-    if (source && item.source !== source) return false;
     if (domain && item.domain !== domain) return false;
     if (!showCompleted && item.status === 'completed') return false;
     return true;
-  }), [allItems, source, domain, showCompleted]);
+  }), [allItems, domain, showCompleted]);
 
+  const today = new Date();
   const overdueItems = filteredItems.filter(item => item.status === 'overdue');
-  const dueItems = filteredItems.filter(item => item.status === 'due');
-  const upcomingItems = filteredItems.filter(item => item.status === 'upcoming');
-  const completedItems = filteredItems.filter(item => item.status === 'completed');
+  const todayItems = filteredItems.filter(item => sameDay(item.date, today) && item.status !== 'overdue');
+  const weekEnd = endOfDay(addDays(startOfDay(today), 6));
+  const weekItems = filteredItems.filter(item => item.status !== 'overdue' && item.date >= startOfDay(today) && item.date <= weekEnd);
+  const monthItems = filteredItems.filter(item =>
+    item.status !== 'overdue' &&
+    item.date.getFullYear() === today.getFullYear() &&
+    item.date.getMonth() === today.getMonth()
+  );
 
   if (isLoading) {
     return (
@@ -415,31 +694,35 @@ export default function UnifiedReviewDashboard() {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Review Calendar</h1>
-        <div style={styles.subtitle}>Track due reviews and weak areas from test performance.</div>
+        <div style={styles.subtitle}>See what is due today, this week, and across the month.</div>
       </div>
 
       <div style={styles.controls}>
-        <select style={styles.select} value={timeRange} onChange={(e) => setTimeRange(e.target.value)}>
-          <option value="day">Today</option>
-          <option value="week">This Week</option>
-          <option value="month">This Month</option>
-          <option value="all">All</option>
-        </select>
-        <select style={styles.select} value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="">All sources</option>
-          <option value="review-due">Review Due</option>
-          <option value="spaced">Spaced Repetition</option>
-        </select>
-        {domains.length > 0 && (
-          <select style={styles.select} value={domain} onChange={(e) => setDomain(e.target.value)}>
-            <option value="">All domains</option>
-            {domains.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
-        )}
-        <label style={styles.checkLabel}>
-          <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} />
-          Show completed
-        </label>
+        <div style={styles.tabs} aria-label="Calendar view">
+          {['day', 'week', 'month'].map((option) => (
+            <button
+              key={option}
+              type="button"
+              style={{ ...styles.tab, ...(view === option ? styles.tabActive : {}) }}
+              onClick={() => setView(option)}
+            >
+              {option[0].toUpperCase() + option.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        <div style={styles.controlGroup}>
+          {domains.length > 0 && (
+            <select style={styles.select} value={domain} onChange={(e) => setDomain(e.target.value)}>
+              <option value="">All domains</option>
+              {domains.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          )}
+          <label style={styles.checkLabel}>
+            <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} />
+            Show completed
+          </label>
+        </div>
       </div>
 
       <div style={styles.statRow}>
@@ -448,33 +731,33 @@ export default function UnifiedReviewDashboard() {
           <div style={styles.statValue}>{overdueItems.length}</div>
         </div>
         <div style={styles.stat}>
-          <div style={styles.statLabel}>Due</div>
-          <div style={styles.statValue}>{dueItems.length}</div>
+          <div style={styles.statLabel}>Today</div>
+          <div style={styles.statValue}>{todayItems.length}</div>
         </div>
         <div style={styles.stat}>
-          <div style={styles.statLabel}>Upcoming</div>
-          <div style={styles.statValue}>{upcomingItems.length}</div>
+          <div style={styles.statLabel}>Next 7 Days</div>
+          <div style={styles.statValue}>{weekItems.length}</div>
         </div>
         <div style={styles.stat}>
-          <div style={styles.statLabel}>Sources</div>
-          <div style={styles.statValue}>{new Set(filteredItems.map(item => item.source)).size}</div>
+          <div style={styles.statLabel}>This Month</div>
+          <div style={styles.statValue}>{monthItems.length}</div>
         </div>
       </div>
 
       {data?.failures?.length > 0 && (
         <div style={{ ...styles.empty, marginBottom: SPACE.lg }}>
-          Some review sources did not respond, so this calendar is showing the sources that are available.
+          Some review data did not respond, so this calendar is showing what is available.
         </div>
       )}
 
       {filteredItems.length === 0 ? (
-        <div style={styles.empty}>No reviews match the current filters.</div>
+        <EmptyState />
       ) : (
         <>
-          <CalendarSection title="Overdue" items={overdueItems} />
-          <CalendarSection title="Due Now" items={dueItems} />
-          <CalendarSection title="Upcoming" items={upcomingItems} />
-          {showCompleted && <CalendarSection title="Completed" items={completedItems} />}
+          <OverdueSection items={overdueItems} />
+          {view === 'day' && <DayView items={filteredItems} />}
+          {view === 'week' && <WeekView items={filteredItems} />}
+          {view === 'month' && <MonthView items={filteredItems} />}
         </>
       )}
     </div>
