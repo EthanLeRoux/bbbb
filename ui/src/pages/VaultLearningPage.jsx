@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import VaultReviewDashboard from '../components/VaultReviewDashboard';
 import VaultTestComponent from '../components/VaultTestComponent';
 import TestResubmissionDashboard from '../components/TestResubmissionDashboard';
 import VaultItemStats from '../components/VaultItemStats';
@@ -254,7 +253,6 @@ export default function VaultLearningPage() {
   }, [allNotes, search]);
 
   const tabs = [
-    { id: 'dashboard', label: 'Review Calendar' },
     { id: 'card', label: 'Card Browser' },
     { id: 'test', label: 'Take Test' },
     { id: 'resubmit', label: 'Resubmit Tests' },
@@ -340,15 +338,6 @@ export default function VaultLearningPage() {
           </div>
         );
 
-      case 'dashboard':
-        return (
-          <div style={styles.tabContent}>
-            <div style={styles.section}>
-              <VaultReviewDashboard />
-            </div>
-          </div>
-        );
-      
       case 'test':
         if (!selectedVaultId) {
           return (

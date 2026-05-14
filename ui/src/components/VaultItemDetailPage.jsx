@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import VaultReviewDashboard from './VaultReviewDashboard';
+import { Link } from 'react-router-dom';
 import VaultItemStats from './VaultItemStats';
 import VaultTestComponent from './VaultTestComponent';
 import TestResubmissionDashboard from './TestResubmissionDashboard';
@@ -63,6 +63,25 @@ const styles = {
     color: COLORS.text,
     marginBottom: SPACE.md,
   },
+  reviewLinkCard: {
+    display: 'block',
+    backgroundColor: COLORS.surface,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    padding: SPACE.lg,
+    color: COLORS.text,
+    textDecoration: 'none',
+  },
+  reviewLinkTitle: {
+    fontFamily: FONTS.serif,
+    fontSize: SIZE.lg,
+    marginBottom: SPACE.xs,
+  },
+  reviewLinkText: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.sm,
+    color: COLORS.muted,
+  },
 };
 
 export default function VaultItemDetailPage({ vaultId, vaultTitle, vaultDomain, vaultSection, vaultPath }) {
@@ -81,7 +100,12 @@ export default function VaultItemDetailPage({ vaultId, vaultTitle, vaultDomain, 
         return (
           <div style={styles.tabContent}>
             <div style={styles.section}>
-              <VaultReviewDashboard />
+              <Link to="/review-due" style={styles.reviewLinkCard}>
+                <div style={styles.reviewLinkTitle}>Review Calendar</div>
+                <div style={styles.reviewLinkText}>
+                  Reviews for this item now live in the central Review Calendar dashboard.
+                </div>
+              </Link>
             </div>
           </div>
         );

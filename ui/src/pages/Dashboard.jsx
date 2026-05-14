@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { getStats, getTests } from '../api/tests';
 import Badge from '../components/Badge';
 import Skeleton from '../components/Skeleton';
-import VaultReviewDashboard from '../components/VaultReviewDashboard';
 import { COLORS, FONTS, SPACE, SIZE, LABELS, PAGE_SIZE } from '../constants';
 
 const styles = {
@@ -42,6 +41,26 @@ const styles = {
     fontSize: SIZE.xl,
     color: COLORS.text,
     marginBottom: SPACE.md,
+  },
+  reviewLinkCard: {
+    display: 'block',
+    backgroundColor: COLORS.surface,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    padding: SPACE.lg,
+    marginBottom: SPACE.xl,
+    color: COLORS.text,
+    textDecoration: 'none',
+  },
+  reviewLinkTitle: {
+    fontFamily: FONTS.serif,
+    fontSize: SIZE.lg,
+    marginBottom: SPACE.xs,
+  },
+  reviewLinkText: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.sm,
+    color: COLORS.muted,
   },
   testRow: {
     display: 'flex',
@@ -134,8 +153,12 @@ export default function Dashboard() {
         {LABELS.tests.startAttempt}
       </Link>
 
-      {/* Vault Spaced Repetition Learning Progress */}
-      <VaultReviewDashboard />
+      <Link to="/review-due" style={styles.reviewLinkCard}>
+        <div style={styles.reviewLinkTitle}>Review Calendar</div>
+        <div style={styles.reviewLinkText}>
+          Open the central dashboard for Vault, Review Due, and spaced repetition reviews.
+        </div>
+      </Link>
 
       <div>
         <h2 style={styles.sectionHeader}>Recent Tests</h2>
