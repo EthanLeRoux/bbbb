@@ -592,7 +592,6 @@ export default function AttemptDetail() {
 
   // Helper functions to detect AI scoring
   const hasAIScoring = attempt?.perQuestionResults?.q0?.aiScore !== undefined;
-  const needsRemarking = !hasAIScoring && isCompleted;
   const hasBeenRemarked = (attempt?.remarkCount || 0) > 0;
   const scoreImprovement = attempt?.isResubmission && attempt?.originalScore != null
     ? (attempt.scorePercent - attempt.originalScore)
@@ -767,12 +766,12 @@ export default function AttemptDetail() {
             </div>
           )}
           
-          {needsRemarking && (
+          {isCompleted && (
             <RemarkButton
               attemptId={id}
               onRemark={handleRemark}
               isLoading={isRemarkingAttempt}
-              hasBeenRemarked={hasBeenRemarked}
+              hasBeenRemarked={hasBeenRemarked || hasAIScoring}
               scoreImprovement={scoreImprovement}
               remarkCount={attempt.remarkCount}
             />

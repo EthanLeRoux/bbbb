@@ -475,8 +475,11 @@ class AttemptService {
         throw new Error('Attempt not found');
       }
 
+      const answers = this._extractRemarkAnswers(attempt);
+      const timings = this._extractRemarkTimings(attempt);
+
       // Check if attempt has required data for remarking
-      if (!attempt.answers || !attempt.testId) {
+      if (!attempt.testId || Object.keys(answers).length === 0) {
         throw new Error('Attempt does not have required data for remarking');
       }
 
@@ -487,7 +490,26 @@ class AttemptService {
       }
 
       // Re-calculate scoring using AI evaluation
-      const newScoringResults = await this._calculateScoring(test, attempt.answers, attempt.timings || {});
+      const newScoringResults = await this._calculateScoring(test, answers, timings);
+      const processedQuestionResults = await this._createQuestionResults(
+        test,
+        answers,
+        timings,
+        { ...newScoringResults, attemptId }
+      );
+
+      // Rebuild derived attempt state from the current model shape. This lets old
+      // attempts pick up newly-added fields whenever they are re-marked.
+      await Attempt.updateQuestionResults(attemptId, processedQuestionResults);
+
+      try {
+        await TestQuestionResult.deleteByAttemptId(attemptId);
+        for (const result of processedQuestionResults) {
+          await TestQuestionResult.create(result);
+        }
+      } catch (questionResultError) {
+        console.error('[AttemptService] Question result refresh failed during remark:', questionResultError);
+      }
 
       // Generate new AI critiques
       let newCritiques = null;
@@ -501,9 +523,21 @@ class AttemptService {
       }
 
       // Update attempt with new scoring and critiques
+      const totalQuestions = newScoringResults.totalQuestions || 0;
+      const correctCount = newScoringResults.correctCount || 0;
+      const avgTime = totalQuestions > 0
+        ? (newScoringResults.totalTime || 0) / totalQuestions
+        : 0;
       const updatedAttempt = await Attempt.findByIdAndUpdate(attemptId, {
+        answers,
+        timings,
         ...newScoringResults,
+        scorePercent: newScoringResults.score,
+        correctAnswers: correctCount,
+        avgTimePerQuestion: avgTime,
+        totalQuestions,
         critiques: newCritiques,
+        hasAIScoring: true,
         lastRemarkedAt: new Date(),
         remarkCount: (attempt.remarkCount || 0) + 1
       });
@@ -526,6 +560,63 @@ class AttemptService {
     if (!attemptId || typeof attemptId !== 'string' || attemptId.trim().length === 0) {
       throw new Error('Attempt ID is required and must be a non-empty string');
     }
+  }
+
+  _extractRemarkAnswers(attempt) {
+    if (
+      attempt.answers &&
+      typeof attempt.answers === 'object' &&
+      !Array.isArray(attempt.answers) &&
+      Object.keys(attempt.answers).length > 0
+    ) {
+      return { ...attempt.answers };
+    }
+
+    const answers = {};
+    const source = Array.isArray(attempt.questionResults)
+      ? attempt.questionResults
+      : Object.entries(attempt.perQuestionResults || {}).map(([questionId, result]) => ({
+          questionId,
+          ...result
+        }));
+
+    source.forEach((result, index) => {
+      const questionId = result.questionId || `q${index}`;
+      const userAnswer = result.userAnswer ?? result.answer ?? result.response;
+      if (userAnswer !== undefined && userAnswer !== null) {
+        answers[questionId] = userAnswer;
+      }
+    });
+
+    return answers;
+  }
+
+  _extractRemarkTimings(attempt) {
+    if (
+      attempt.timings &&
+      typeof attempt.timings === 'object' &&
+      !Array.isArray(attempt.timings) &&
+      Object.keys(attempt.timings).length > 0
+    ) {
+      return { ...attempt.timings };
+    }
+
+    const timings = {};
+    const source = Array.isArray(attempt.questionResults)
+      ? attempt.questionResults
+      : Object.entries(attempt.perQuestionResults || {}).map(([questionId, result]) => ({
+          questionId,
+          ...result
+        }));
+
+    source.forEach((result, index) => {
+      const questionId = result.questionId || `q${index}`;
+      timings[questionId] = Number(
+        result.timeSpent ?? result.timing ?? result.timeSpentSeconds ?? 0
+      ) || 0;
+    });
+
+    return timings;
   }
 
   /**

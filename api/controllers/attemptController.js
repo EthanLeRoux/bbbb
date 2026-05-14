@@ -272,19 +272,26 @@ class AttemptController {
 
       // Get the original attempt for comparison
       const originalAttempt = await this.attemptService.getAttemptById(attemptId);
-      const originalScore = originalAttempt.score;
+      const originalScore = originalAttempt.score ?? originalAttempt.scorePercent ?? 0;
 
       // Re-mark the attempt with AI scoring
       const remarkedAttempt = await this.attemptService.remarkAttempt({ attemptId: attemptId });
 
       // Mirror the remark result to the unified collection
       try {
-        await this.unifiedService.remarkAttempt(
-          attemptId,
-          remarkedAttempt.score,
-          remarkedAttempt.perQuestionResults || {},
-          remarkedAttempt.critiques || null,
-        );
+        await this.unifiedService.remarkAttempt(attemptId, {
+          score: remarkedAttempt.score,
+          scorePercent: remarkedAttempt.scorePercent ?? remarkedAttempt.score,
+          correctAnswers: remarkedAttempt.correctAnswers,
+          totalQuestions: remarkedAttempt.totalQuestions,
+          avgTimePerQuestion: remarkedAttempt.avgTimePerQuestion,
+          perQuestionResults: remarkedAttempt.perQuestionResults || {},
+          questionResults: remarkedAttempt.questionResults || [],
+          critiques: remarkedAttempt.critiques || null,
+          hasAIScoring: true,
+          lastRemarkedAt: remarkedAttempt.lastRemarkedAt,
+          remarkCount: remarkedAttempt.remarkCount || 1,
+        });
       } catch (unifiedErr) {
         // Non-fatal — the attempt may only exist in the legacy collection
         console.error('[AttemptController] Unified remark mirror failed (non-fatal):', unifiedErr.message);

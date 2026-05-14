@@ -292,6 +292,7 @@ export default function AttemptList() {
               const isVaultAttempt = !!attempt.vaultId;
               const hasAIScoring = attempt.hasAIScoring || false;
               const needsRemarking = !hasAIScoring && attempt.status === 'completed' && !isVaultAttempt;
+              const canRemark = attempt.status === 'completed' && !isVaultAttempt;
               const hasBeenRemarked = (attempt.remarkCount || 0) > 0;
               const isRemarking = remarkingIds.has(attempt.id);
               const submittedAt = formatDateTime(getAttemptSubmittedAt(attempt));
@@ -301,7 +302,7 @@ export default function AttemptList() {
                   key={attempt.id}
                   style={{
                     ...styles.tableRow,
-                    cursor: needsRemarking ? 'default' : 'pointer',
+                    cursor: 'pointer',
                   }}
                   onClick={(e) => handleRowClick(e, attempt.id, hasAIScoring)}
                   onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.bg}
@@ -360,7 +361,7 @@ export default function AttemptList() {
                   <div style={styles.tableCell}>
                     {attempt.correctAnswers || 0} / {attempt.totalQuestions || '?'}</div>
                   <div style={styles.actionCell}>
-                    {needsRemarking && (
+                    {canRemark && (
                       <button
                         data-action="remark"
                         style={{

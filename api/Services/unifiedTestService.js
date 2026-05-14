@@ -438,9 +438,10 @@ async submitAttempt({
       if (!doc.exists) throw new Error(`Attempt not found: ${attemptId}`);
 
       const data = doc.data();
+      const nextRemarkCount = remarkData.remarkCount ?? ((data.remarkCount || 0) + 1);
       const updates = {
         ...remarkData,
-        remarkCount: (data.remarkCount || 0) + 1,
+        remarkCount: nextRemarkCount,
         updatedAt: new Date(),
       };
 
