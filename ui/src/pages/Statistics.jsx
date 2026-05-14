@@ -94,8 +94,25 @@ const styles = {
     minHeight: 360,
     overflow: 'hidden',
   },
+  panelCollapsed: {
+    minHeight: 0,
+  },
   panelWide: {
     gridColumn: '1 / -1',
+  },
+  panelExpanded: {
+    gridColumn: '1 / -1',
+    minHeight: 560,
+  },
+  panelHeaderRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: SPACE.md,
+    marginBottom: SPACE.md,
+  },
+  panelTitleBlock: {
+    minWidth: 0,
   },
   panelTitle: {
     margin: 0,
@@ -104,8 +121,22 @@ const styles = {
     fontSize: SIZE.xl,
     color: COLORS.text,
   },
+  panelActions: {
+    display: 'flex',
+    gap: SPACE.xs,
+    flexShrink: 0,
+  },
+  panelButton: {
+    backgroundColor: COLORS.bg,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 6,
+    color: COLORS.text,
+    cursor: 'pointer',
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.xs,
+    padding: `${SPACE.xs}px ${SPACE.sm}px`,
+  },
   panelPurpose: {
-    marginBottom: SPACE.md,
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
     color: COLORS.muted,
@@ -152,6 +183,9 @@ const styles = {
     maxHeight: 520,
     border: `1px solid ${COLORS.border}`,
     borderRadius: 6,
+  },
+  heatmapExpanded: {
+    maxHeight: 720,
   },
   heatmapGrid: {
     display: 'grid',
@@ -443,7 +477,46 @@ function EmptyChart({ children }) {
   return <div style={styles.empty}>{children}</div>;
 }
 
-function BarChart({ data, groupLevel }) {
+function chartSvgStyle(expanded) {
+  return {
+    ...styles.chartSvg,
+    height: expanded ? 460 : styles.chartSvg.height,
+    minWidth: expanded ? 900 : styles.chartSvg.minWidth,
+  };
+}
+
+function ChartPanel({ id, title, purpose, collapsed, expanded, wide = false, onToggleCollapse, onToggleExpand, children }) {
+  return (
+    <section
+      style={{
+        ...styles.panel,
+        ...(wide ? styles.panelWide : {}),
+        ...(expanded ? styles.panelExpanded : {}),
+        ...(collapsed ? styles.panelCollapsed : {}),
+      }}
+    >
+      <div style={styles.panelHeaderRow}>
+        <div style={styles.panelTitleBlock}>
+          <h2 style={styles.panelTitle}>{title}</h2>
+          {!collapsed && <div style={styles.panelPurpose}>{purpose}</div>}
+        </div>
+        <div style={styles.panelActions}>
+          <button type="button" style={styles.panelButton} onClick={() => onToggleCollapse(id)}>
+            {collapsed ? 'Show' : 'Collapse'}
+          </button>
+          {!collapsed && (
+            <button type="button" style={styles.panelButton} onClick={() => onToggleExpand(id)}>
+              {expanded ? 'Default' : 'Expand'}
+            </button>
+          )}
+        </div>
+      </div>
+      {!collapsed && children}
+    </section>
+  );
+}
+
+function BarChart({ data, groupLevel, expanded = false }) {
   if (!data.length) return <EmptyChart>No topic performance data for these filters.</EmptyChart>;
 
   const innerWidth = CHART.width - CHART.left - CHART.right;
@@ -454,7 +527,7 @@ function BarChart({ data, groupLevel }) {
 
   return (
     <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={styles.chartSvg} role="img" aria-label="Topic performance bar chart">
+      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded)} role="img" aria-label="Topic performance bar chart">
         <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         {[0, 25, 50, 75, 100].map(tick => {
@@ -493,7 +566,7 @@ function BarChart({ data, groupLevel }) {
   );
 }
 
-function LineChart({ data, showMovingAverage }) {
+function LineChart({ data, showMovingAverage, expanded = false }) {
   if (data.length < 2) return <EmptyChart>Take at least two tests to see progress over time.</EmptyChart>;
 
   const innerWidth = CHART.width - CHART.left - CHART.right;
@@ -506,7 +579,7 @@ function LineChart({ data, showMovingAverage }) {
 
   return (
     <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={styles.chartSvg} role="img" aria-label="Progress over time line chart">
+      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded)} role="img" aria-label="Progress over time line chart">
         <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         {[0, 25, 50, 75, 100].map(tick => {
@@ -537,7 +610,7 @@ function LineChart({ data, showMovingAverage }) {
   );
 }
 
-function ScatterPlot({ data }) {
+function ScatterPlot({ data, expanded = false }) {
   if (!data.length) return <EmptyChart>No completed tests match these filters.</EmptyChart>;
 
   const innerWidth = CHART.width - CHART.left - CHART.right;
@@ -548,7 +621,7 @@ function ScatterPlot({ data }) {
 
   return (
     <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={styles.chartSvg} role="img" aria-label="Time vs score scatter plot">
+      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded)} role="img" aria-label="Time vs score scatter plot">
         <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         {[0, 25, 50, 75, 100].map(tick => {
@@ -576,12 +649,12 @@ function ScatterPlot({ data }) {
   );
 }
 
-function Heatmap({ data }) {
+function Heatmap({ data, expanded = false }) {
   const { topics, tests } = data;
   if (!topics.length || !tests.length) return <EmptyChart>No topic-by-test data for these filters.</EmptyChart>;
 
   return (
-    <div style={styles.heatmap}>
+    <div style={{ ...styles.heatmap, ...(expanded ? styles.heatmapExpanded : {}) }}>
       <div
         style={{
           ...styles.heatmapGrid,
@@ -634,6 +707,8 @@ export default function Statistics() {
     endDate: '',
   });
   const [showMovingAverage, setShowMovingAverage] = useState(true);
+  const [collapsedCharts, setCollapsedCharts] = useState({});
+  const [expandedChart, setExpandedChart] = useState(null);
 
   const {
     data: attempts = [],
@@ -684,6 +759,23 @@ export default function Statistics() {
       return next;
     });
   };
+
+  const toggleCollapse = (id) => {
+    setCollapsedCharts(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      return next;
+    });
+    if (expandedChart === id) {
+      setExpandedChart(null);
+    }
+  };
+
+  const toggleExpand = (id) => {
+    setExpandedChart(prev => (prev === id ? null : id));
+  };
+
+  const isCollapsed = (id) => !!collapsedCharts[id];
+  const isExpanded = (id) => expandedChart === id;
 
   if (error) {
     return (
@@ -772,29 +864,54 @@ export default function Statistics() {
           </div>
 
           <div style={styles.grid}>
-            <section style={styles.panel}>
-              <h2 style={styles.panelTitle}>Topic Performance</h2>
-              <div style={styles.panelPurpose}>Compare strengths and weaknesses across the current hierarchy level.</div>
-              <BarChart data={barData} groupLevel={groupLevel} />
-            </section>
+            <ChartPanel
+              id="topic-performance"
+              title="Topic Performance"
+              purpose="Compare strengths and weaknesses across the current hierarchy level."
+              collapsed={isCollapsed('topic-performance')}
+              expanded={isExpanded('topic-performance')}
+              onToggleCollapse={toggleCollapse}
+              onToggleExpand={toggleExpand}
+            >
+              <BarChart data={barData} groupLevel={groupLevel} expanded={isExpanded('topic-performance')} />
+            </ChartPanel>
 
-            <section style={styles.panel}>
-              <h2 style={styles.panelTitle}>Progress Over Time</h2>
-              <div style={styles.panelPurpose}>See improvement trends and score consistency across tests.</div>
-              <LineChart data={lineData} showMovingAverage={showMovingAverage} />
-            </section>
+            <ChartPanel
+              id="progress-over-time"
+              title="Progress Over Time"
+              purpose="See improvement trends and score consistency across tests."
+              collapsed={isCollapsed('progress-over-time')}
+              expanded={isExpanded('progress-over-time')}
+              onToggleCollapse={toggleCollapse}
+              onToggleExpand={toggleExpand}
+            >
+              <LineChart data={lineData} showMovingAverage={showMovingAverage} expanded={isExpanded('progress-over-time')} />
+            </ChartPanel>
 
-            <section style={styles.panel}>
-              <h2 style={styles.panelTitle}>Time vs Score</h2>
-              <div style={styles.panelPurpose}>Find whether longer attempts are improving accuracy or just costing time.</div>
-              <ScatterPlot data={filteredTests} />
-            </section>
+            <ChartPanel
+              id="time-vs-score"
+              title="Time vs Score"
+              purpose="Find whether longer attempts are improving accuracy or just costing time."
+              collapsed={isCollapsed('time-vs-score')}
+              expanded={isExpanded('time-vs-score')}
+              onToggleCollapse={toggleCollapse}
+              onToggleExpand={toggleExpand}
+            >
+              <ScatterPlot data={filteredTests} expanded={isExpanded('time-vs-score')} />
+            </ChartPanel>
 
-            <section style={{ ...styles.panel, ...styles.panelWide }}>
-              <h2 style={styles.panelTitle}>Topic vs Test</h2>
-              <div style={styles.panelPurpose}>Identify topics that stay weak across multiple tests.</div>
-              <Heatmap data={heatData} />
-            </section>
+            <ChartPanel
+              id="topic-vs-test"
+              title="Topic vs Test"
+              purpose="Identify topics that stay weak across multiple tests."
+              collapsed={isCollapsed('topic-vs-test')}
+              expanded={isExpanded('topic-vs-test')}
+              wide
+              onToggleCollapse={toggleCollapse}
+              onToggleExpand={toggleExpand}
+            >
+              <Heatmap data={heatData} expanded={isExpanded('topic-vs-test')} />
+            </ChartPanel>
           </div>
         </>
       )}
