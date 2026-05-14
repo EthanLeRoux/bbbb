@@ -1,0 +1,234 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "AI Test System API - Complete Collection",
+    "description": "Complete API collection for AI short-answer test generation and attempt management with Firebase Firestore",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "Server Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:4000/api/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4000",
+              "path": ["api", "health"]
+            },
+            "description": "Check if the server and Firebase are running properly"
+          },
+          "response": []
+        }
+      ],
+      "description": "Health check endpoints to verify system status"
+    },
+    {
+      "name": "Test Generation",
+      "item": [
+        {
+          "name": "Generate Test - Single Section",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"domain\": \"books\",\n  \"sections\": \"Network Security Fundamentals by Gert De Laet\",\n  \"difficulty\": \"medium\",\n  \"questionCount\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:4000/api/tests/generate",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4000",
+              "path": ["api", "tests", "generate"]
+            },
+            "description": "Generate a short-answer test from a single section"
+          },
+          "response": []
+        }
+      ],
+      "description": "Test generation endpoints"
+    },
+    {
+      "name": "Test Attempts",
+      "item": [
+        {
+          "name": "Start Attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testId\": \"{{testId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:4000/api/attempt/start",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4000",
+              "path": ["api", "attempt", "start"]
+            },
+            "description": "Start a new test attempt"
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Attempt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attemptId\": \"{{attemptId}}\",\n  \"testId\": \"{{testId}}\",\n  \"answers\": {\n    \"q0\": \"Single Loss Expectancy measures the potential loss from a single security incident\",\n    \"q1\": \"A firewall is a network security system that monitors and controls incoming and outgoing traffic\"\n  },\n  \"timings\": {\n    \"q0\": 45.2,\n    \"q1\": 32.8\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:4000/api/attempt/submit",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4000",
+              "path": ["api", "attempt", "submit"]
+            },
+            "description": "Submit a test attempt with answers and timing data"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Attempts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:4000/api/attempt?limit=20&offset=0",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4000",
+              "path": ["api", "attempt"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Get a paginated list of all attempts"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:4000/api/attempt/{{attemptId}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4000",
+              "path": ["api", "attempt", "{{attemptId}}"]
+            },
+            "description": "Get a specific attempt by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:4000/api/attempt/stats",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4000",
+              "path": ["api", "attempt", "stats"]
+            },
+            "description": "Get comprehensive attempt statistics"
+          },
+          "response": []
+        }
+      ],
+      "description": "Test attempt endpoints for managing test submissions and scoring"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Save test ID from generate response",
+          "if (pm.request.url.path.includes('/generate') && pm.response.code === 201) {",
+          "  const response = pm.response.json();",
+          "  if (response.data && response.data.id) {",
+          "    pm.environment.set('testId', response.data.id);",
+          "  }",
+          "}",
+          "",
+          "// Save attempt ID from start response",
+          "if (pm.request.url.path.includes('/start') && pm.response.code === 201) {",
+          "  const response = pm.response.json();",
+          "  if (response.data && response.data.attemptId) {",
+          "    pm.environment.set('attemptId', response.data.attemptId);",
+          "  }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "testId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attemptId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

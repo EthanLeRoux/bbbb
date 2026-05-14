@@ -1,0 +1,21 @@
+{
+  "name": "anidb-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --watch index.js"
+  },
+  "keywords": [],
+  "author": "Ives van Hoorne",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "firebase-admin": "^13.8.0",
+    "node-fetch": "^2.7.0",
+    "nodemon": "^3.1.14",
+    "openai": "^6.35.0"
+  }
+}
