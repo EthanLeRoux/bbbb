@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getDomains, getSections, getNotes, searchVault } from '../api/vault';
+import { getDomains, getSections, getTopics, getTopicNotes, searchVault } from '../api/vault';
 import Skeleton from '../components/Skeleton';
 import { useDebounce } from '../hooks/useDebounce';
 import { COLORS, FONTS, SPACE, SIZE, LABELS } from '../constants';
@@ -147,6 +147,7 @@ const styles = {
 export default function VaultExplorer() {
   const [selectedDomain, setSelectedDomain] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearch = useDebounce(searchInput);
 
@@ -161,11 +162,26 @@ export default function VaultExplorer() {
     enabled: !!selectedDomain && !debouncedSearch
   });
 
-  const { data: notes, isLoading: notesLoading, error: notesError, refetch: refetchNotes } = useQuery({
-    queryKey: ['vault', selectedDomain, selectedSection, 'notes'],
-    queryFn: () => getNotes(selectedDomain, selectedSection),
+  const { data: topics, isLoading: topicsLoading, error: topicsError, refetch: refetchTopics } = useQuery({
+    queryKey: ['vault', selectedDomain, selectedSection, 'topics'],
+    queryFn: () => getTopics(selectedDomain, selectedSection),
     enabled: !!selectedDomain && !!selectedSection && !debouncedSearch
   });
+
+  const { data: topicNotes, isLoading: topicNotesLoading, error: topicNotesError, refetch: refetchTopicNotes } = useQuery({
+    queryKey: ['vault', selectedDomain, selectedSection, selectedTopic, 'notes'],
+    queryFn: () => getTopicNotes(selectedDomain, selectedSection, selectedTopic),
+    enabled: !!selectedDomain && !!selectedSection && !!selectedTopic && !debouncedSearch
+  });
+
+  useEffect(() => {
+    if (!selectedSection) return;
+
+    const selectedTopicStillExists = topics?.some((topic) => topic.name === selectedTopic);
+    if (selectedTopicStillExists) return;
+
+    setSelectedTopic(topics?.[0]?.name || '');
+  }, [selectedSection, selectedTopic, topics]);
 
   const { data: searchResults, isLoading: searchLoading, error: searchError, refetch: refetchSearch } = useQuery({
     queryKey: ['vault', 'search', debouncedSearch],
@@ -176,10 +192,16 @@ export default function VaultExplorer() {
   const handleDomainClick = (domain) => {
     setSelectedDomain(domain);
     setSelectedSection('');
+    setSelectedTopic('');
   };
 
   const handleSectionClick = (section) => {
     setSelectedSection(section);
+    setSelectedTopic('');
+  };
+
+  const handleTopicClick = (topic) => {
+    setSelectedTopic(topic);
   };
 
   const handleSearchChange = (e) => {
@@ -187,6 +209,7 @@ export default function VaultExplorer() {
     if (e.target.value) {
       setSelectedDomain('');
       setSelectedSection('');
+      setSelectedTopic('');
     }
   };
 
@@ -236,7 +259,9 @@ export default function VaultExplorer() {
                 >
                   <div style={styles.searchResultTitle}>{result.title}</div>
                   <div style={styles.searchResultMeta}>
-                    {result.domain?.name || result.domain} / {result.section?.name || result.section}
+                    {[result.domain?.name || result.domain, result.section?.name || result.section, result.topic]
+                      .filter(Boolean)
+                      .join(' / ')}
                   </div>
                 </div>
               ))
@@ -289,6 +314,9 @@ export default function VaultExplorer() {
                 }}
               >
                 {domain.name || domain}
+                {domain.noteCount !== undefined && (
+                  <span style={{ color: COLORS.muted }}> ({domain.noteCount})</span>
+                )}
               </div>
             ))
           )}
@@ -323,6 +351,46 @@ export default function VaultExplorer() {
                 }}
               >
                 {section.name || section}
+                {section.noteCount !== undefined && (
+                  <span style={{ color: COLORS.muted }}> ({section.noteCount})</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={styles.column}>
+          <h3 style={styles.sectionHeader}>Topics</h3>
+          {!selectedSection ? (
+            renderEmpty('Select a section to view topics.')
+          ) : topicsError ? (
+            renderError(topicsError, refetchTopics)
+          ) : topicsLoading ? (
+            renderLoading()
+          ) : !topics || topics.length === 0 ? (
+            renderEmpty('No topics in this section.')
+          ) : (
+            topics.map((topic) => (
+              <div
+                key={topic.name}
+                style={{
+                  ...styles.row,
+                  ...(selectedTopic === topic.name ? styles.rowSelected : {}),
+                }}
+                onClick={() => handleTopicClick(topic.name)}
+                onMouseEnter={(e) => {
+                  if (selectedTopic !== topic.name) {
+                    e.currentTarget.style.backgroundColor = COLORS.surface;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedTopic !== topic.name) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                {topic.name}
+                <span style={{ color: COLORS.muted }}> ({topic.noteCount})</span>
               </div>
             ))
           )}
@@ -330,14 +398,16 @@ export default function VaultExplorer() {
 
         <div style={{ ...styles.column, ...styles.columnLast }}>
           <h3 style={styles.sectionHeader}>Notes</h3>
-          {notesError ? (
-            renderError(notesError, refetchNotes)
-          ) : notesLoading ? (
+          {!selectedTopic ? (
+            renderEmpty('Select a topic to view notes.')
+          ) : topicNotesError ? (
+            renderError(topicNotesError, refetchTopicNotes)
+          ) : topicNotesLoading ? (
             renderLoading()
-          ) : !notes || notes.length === 0 ? (
+          ) : !topicNotes || topicNotes.length === 0 ? (
             renderEmpty(LABELS.empty.notes)
           ) : (
-            notes.map((note) => (
+            topicNotes.map((note) => (
               <div
                 key={note.id}
                 style={styles.noteRow}

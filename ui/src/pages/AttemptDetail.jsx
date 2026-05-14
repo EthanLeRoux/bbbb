@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAttemptById, submitAttempt, remarkAttempt } from '../api/attempts';
 import { getTestById } from '../api/tests';
 import { submitTest as submitSpacedRepetitionTest } from '../api/spacedRepetition';
-import { submitVaultTest } from '../api/vaultSpacedRepetition';
 import Badge from '../components/Badge';
 import Skeleton from '../components/Skeleton';
 import AIScoreBadge from '../components/AIScoreBadge';
@@ -488,25 +487,9 @@ export default function AttemptDetail() {
           }
         }
 
-        // Try to submit to vault spaced repetition system
-        try {
-          const vaultPayload = {
-            vaultId: payload.testId, // Use testId as vaultId
-            ...basePayload
-          };
-          
-          console.log('Submitting to vault spaced repetition:', vaultPayload);
-          await submitVaultTest(vaultPayload);
-          console.log('Vault spaced repetition submission successful');
-        } catch (vaultError) {
-          console.log('Vault spaced repetition submission error:', vaultError);
-          if (vaultError?.message?.includes('404') || vaultError?.message?.includes('Not Found') ||
-              vaultError?.message?.includes('500') || vaultError?.message?.includes('Internal Server Error')) {
-            console.log('Vault spaced repetition API not available yet - skipping submission');
-          } else {
-            console.error('Failed to submit to vault spaced repetition:', vaultError);
-          }
-        }
+        // Generated tests are already submitted through UnifiedTestService.
+        // The vault-learning endpoint is reserved for a single Obsidian card id,
+        // so do not send generated test ids there.
       }
       
       return attemptResult;

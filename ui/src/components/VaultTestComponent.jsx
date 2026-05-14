@@ -233,6 +233,7 @@ export default function VaultTestComponent({ vaultId, vaultTitle }) {
     const { attempt: submittedAttempt, vaultInfo } = result;
     const srData = result.spacedRepetitionResult?.data;
     const srStats = srData?.updatedStats;
+    const weakAreas = srData?.weakAreas || result.weakAreas || [];
 
     // Score from the unified attempt object; fall back to SR data for legacy compat
     const scorePercent = submittedAttempt?.scorePercent ?? srData?.testAttempt?.scorePercent;
@@ -317,11 +318,11 @@ export default function VaultTestComponent({ vaultId, vaultTitle }) {
             )}
           </div>
           
-          {spacedRepetitionResult.weakAreas && spacedRepetitionResult.weakAreas.length > 0 && (
+          {weakAreas.length > 0 && (
             <div style={styles.weakAreas}>
               <h4 style={styles.weakAreasTitle}>Areas to Improve:</h4>
               <ul style={styles.weakAreasList}>
-                {spacedRepetitionResult.weakAreas.map((area, index) => (
+                {weakAreas.map((area, index) => (
                   <li key={index}>{area}</li>
                 ))}
               </ul>

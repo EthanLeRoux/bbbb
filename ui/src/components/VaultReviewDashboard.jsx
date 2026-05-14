@@ -197,8 +197,8 @@ function QueueCard({ item, rank }) {
     : COLORS.border;
 
   const title = item.vaultInfo?.title || item.entityId || 'Unknown';
-  const domain = item.vaultInfo?.domain || '';
-  const section = item.vaultInfo?.section || '';
+  const domain = item.vaultInfo?.domain || item.domainId || '';
+  const section = item.vaultInfo?.section || item.sectionId || '';
   const domainLabel = [domain, section].filter(Boolean).join(' › ');
 
   return (
@@ -267,7 +267,7 @@ export default function VaultReviewDashboard() {
     let items = data?.due || [];
     if (domain) {
       items = items.filter(item => 
-        item.vaultInfo?.domain?.toLowerCase() === domain.toLowerCase()
+        (item.vaultInfo?.domain || item.domainId || '').toLowerCase() === domain.toLowerCase()
       );
     }
     if (overdueOnly) {
@@ -280,7 +280,7 @@ export default function VaultReviewDashboard() {
     let items = data?.upcoming || [];
     if (domain) {
       items = items.filter(item => 
-        item.vaultInfo?.domain?.toLowerCase() === domain.toLowerCase()
+        (item.vaultInfo?.domain || item.domainId || '').toLowerCase() === domain.toLowerCase()
       );
     }
     return items;
@@ -291,8 +291,9 @@ export default function VaultReviewDashboard() {
     const allItems = [...(data?.due || []), ...(data?.upcoming || [])];
     const domains = new Set();
     allItems.forEach(item => {
-      if (item.vaultInfo?.domain) {
-        domains.add(item.vaultInfo.domain);
+      const itemDomain = item.vaultInfo?.domain || item.domainId;
+      if (itemDomain) {
+        domains.add(itemDomain);
       }
     });
     return Array.from(domains).sort();

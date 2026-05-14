@@ -236,11 +236,12 @@ export default function VaultItemStats({ vaultId }) {
   }
 
   const { hierarchy, spacedRepetitionStats, vaultInfo } = stats;
+  const aggregateStats = !spacedRepetitionStats ? stats : null;
 
   // Resolve display values: prefer vaultInfo (new API), fall back to hierarchy (legacy)
-  const displayDomain = vaultInfo?.domain || hierarchy?.domainId || null;
-  const displaySection = vaultInfo?.section || hierarchy?.sectionId || null;
-  const displayMaterial = hierarchy?.materialId || null;
+  const displayDomain = vaultInfo?.domain || hierarchy?.domainId || stats.domainId || null;
+  const displaySection = vaultInfo?.section || hierarchy?.sectionId || stats.sectionId || null;
+  const displayMaterial = hierarchy?.materialId || stats.vaultId || null;
   const displayPath = vaultInfo?.path || null;
   const displayFolders = vaultInfo?.folders || null;
   const displayTitle = vaultInfo?.title || null;
@@ -303,6 +304,36 @@ export default function VaultItemStats({ vaultId }) {
         </div>
       )}
 
+      {aggregateStats && (
+        <div style={styles.statsGrid}>
+          <div style={styles.statCard}>
+            <h3 style={styles.statCardTitle}>Attempts</h3>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Total Attempts:</span>
+              <span style={styles.statValue}>{aggregateStats.totalAttempts || 0}</span>
+            </div>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Average Score:</span>
+              <span style={{ ...styles.statValue, color: getScoreColor(aggregateStats.avgScore || 0) }}>
+                {aggregateStats.avgScore ?? 0}%
+              </span>
+            </div>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Best Score:</span>
+              <span style={{ ...styles.statValue, color: getScoreColor(aggregateStats.bestScore || 0) }}>
+                {aggregateStats.bestScore ?? 0}%
+              </span>
+            </div>
+            <div style={styles.statItem}>
+              <span style={styles.statLabel}>Last Attempt:</span>
+              <span style={styles.statValue}>{formatDate(aggregateStats.lastAttemptAt)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {spacedRepetitionStats && (
+        <>
       {/* Stats Grid */}
       <div style={styles.statsGrid}>
         <div style={styles.statCard}>
@@ -415,6 +446,8 @@ export default function VaultItemStats({ vaultId }) {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

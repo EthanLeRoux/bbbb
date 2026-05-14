@@ -4,7 +4,7 @@ import VaultReviewDashboard from '../components/VaultReviewDashboard';
 import VaultTestComponent from '../components/VaultTestComponent';
 import TestResubmissionDashboard from '../components/TestResubmissionDashboard';
 import VaultItemStats from '../components/VaultItemStats';
-import { get } from '../api/client';
+import { getAllNotes } from '../api/vault';
 import { COLORS, FONTS, SIZE, SPACE } from '../constants';
 
 const styles = {
@@ -111,16 +111,12 @@ export default function VaultLearningPage() {
     queryKey: ['vault', 'all-notes-for-learning'],
     queryFn: async () => {
       try {
-        const notes = await get('/api/vault/notes?limit=100');
-        return notes.map(note => {
-          const sectionKey = note.section === '' ? '_root' : (note.section || '_root');
-          const noteId = note.fileName?.replace(/\.md$/i, '') || 'unknown';
-          return {
-            ...note,
-            vaultId: `${note.domain}__${sectionKey}__${noteId}`,
-            title: note.title || noteId,
-          };
-        });
+        const notes = await getAllNotes(100);
+        return notes.map(note => ({
+          ...note,
+          vaultId: note.id,
+          title: note.title || note.id,
+        }));
       } catch (err) {
         console.error('[VaultLearning] Error fetching vault notes:', err);
         return [];
@@ -255,7 +251,7 @@ export default function VaultLearningPage() {
             </select>
             {selectedVault && (
               <span style={styles.vaultInfo}>
-                {selectedVault.domain}{selectedVault.section ? ` / ${selectedVault.section}` : ''}
+                {[selectedVault.domain, selectedVault.section, selectedVault.topic].filter(Boolean).join(' / ')}
               </span>
             )}
           </div>

@@ -6,6 +6,7 @@ const path = require('path');
 const EXCLUDED_ROOT_FOLDERS = new Set(['templates']);
 const TOPIC_MAP_FILE = '_index.md';
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
+const TEMPLATE_FIELD_RE = /^\*\*([^:*]+):\*\*\s*\{\{(.*?)\}\}\s*$/gm;
 
 function parseFrontmatter(raw) {
   const match = raw.match(FRONTMATTER_RE);
@@ -51,6 +52,31 @@ function parseFrontmatter(raw) {
   return meta;
 }
 
+function parseTemplateMetadata(raw) {
+  const meta = {};
+  let match;
+
+  while ((match = TEMPLATE_FIELD_RE.exec(raw)) !== null) {
+    const key = match[1].trim().toLowerCase();
+    const value = match[2].trim();
+    if (key) meta[key] = value;
+  }
+
+  if (!meta.title) {
+    const titleMatch = raw.match(/^#\s+\{\{(.+?)\}\}/m) || raw.match(/^#\s+(.+)$/m);
+    if (titleMatch) meta.title = titleMatch[1].trim();
+  }
+
+  return meta;
+}
+
+function parseMetadata(raw) {
+  return {
+    ...parseTemplateMetadata(raw),
+    ...parseFrontmatter(raw),
+  };
+}
+
 function validateCardId(id) {
   if (id === undefined || id === null || `${id}`.trim() === '') {
     return { valid: false, reason: 'missing id field' };
@@ -67,7 +93,13 @@ function normalizeTags(tags) {
 function extractMarkdownBody(raw) {
   return raw
     .replace(FRONTMATTER_RE, '')
+    .replace(/^#\s+\{\{.+?\}\}\s*\r?\n/, '')
+    .replace(/^\*\*[^:*]+:\*\*\s*\{\{.*?\}\}\s*(?:  )?\r?\n/gm, '')
     .replace(/^\s*(?:#\s+Content\s*\r?\n)?/i, '');
+}
+
+function normalizeComparable(value) {
+  return `${value || ''}`.trim().toLowerCase();
 }
 
 class VaultService {
@@ -94,6 +126,7 @@ class VaultService {
 
     for (const entry of domainEntries) {
       if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith('.')) continue;
       if (EXCLUDED_ROOT_FOLDERS.has(entry.name.toLowerCase())) continue;
 
       const domainName = entry.name;
@@ -131,9 +164,18 @@ class VaultService {
   async _scanSection(sectionPath, domainName, sectionName, seenIds) {
     const section = { notes: [] };
     const invalidNotes = [];
-    const topicEntries = await fs.readdir(sectionPath, { withFileTypes: true });
+    const sectionEntries = await fs.readdir(sectionPath, { withFileTypes: true });
 
-    for (const topicEntry of topicEntries) {
+    for (const entry of sectionEntries) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      if (entry.name === TOPIC_MAP_FILE) continue;
+
+      const result = await this._readNote(sectionPath, entry.name, domainName, sectionName, null, seenIds);
+      if (result.note) section.notes.push(result.note);
+      else if (result.invalid) invalidNotes.push(result.invalid);
+    }
+
+    for (const topicEntry of sectionEntries) {
       if (!topicEntry.isDirectory()) continue;
       const topicName = topicEntry.name;
       const topicPath = path.join(sectionPath, topicName);
@@ -163,8 +205,11 @@ class VaultService {
       return {};
     }
 
-    const meta = parseFrontmatter(content);
-    const required = ['id', 'title', 'type', 'domain', 'section', 'topic'];
+    const meta = parseMetadata(content);
+    const derivedDomain = meta.domain || domainName;
+    const derivedSection = meta.section || sectionName;
+    const derivedTopic = meta.topic || meta.subcategory || topicName || sectionName;
+    const required = ['id', 'title', 'type'];
     const missing = required.filter(field => !meta[field] || `${meta[field]}`.trim() === '');
 
     if (missing.length > 0) {
@@ -194,8 +239,13 @@ class VaultService {
     }
     seenIds.add(cardId);
 
-    if (meta.domain !== domainName || meta.section !== sectionName || meta.topic !== topicName) {
-      const reason = `hierarchy mismatch (frontmatter=${meta.domain}/${meta.section}/${meta.topic}, folder=${domainName}/${sectionName}/${topicName})`;
+    const hasMismatch =
+      (meta.domain && normalizeComparable(meta.domain) !== normalizeComparable(domainName)) ||
+      (meta.section && normalizeComparable(meta.section) !== normalizeComparable(sectionName)) ||
+      (topicName && meta.topic && normalizeComparable(meta.topic) !== normalizeComparable(topicName));
+
+    if (hasMismatch) {
+      const reason = `hierarchy mismatch (metadata=${derivedDomain}/${derivedSection}/${derivedTopic}, folder=${domainName}/${sectionName}/${topicName || '(section root)'})`;
       console.warn(`[VaultService] Invalid card excluded — ${reason}: "${filePath}"`);
       return { invalid: { filePath, fileName, reason } };
     }
@@ -207,9 +257,9 @@ class VaultService {
         id: cardId,
         title: meta.title,
         type: meta.type,
-        domain: meta.domain,
-        section: meta.section,
-        topic: meta.topic,
+        domain: derivedDomain,
+        section: derivedSection,
+        topic: derivedTopic,
         source: meta.source,
         created: meta.created,
         updated: meta.updated,
@@ -251,6 +301,32 @@ class VaultService {
     if (!section) throw new Error(`Section "${sectionName}" not found in domain "${domainName}"`);
 
     return section.notes;
+  }
+
+  async getTopicsBySection(domainName, sectionName) {
+    const notes = await this.getNotesBySection(domainName, sectionName);
+    const topics = new Map();
+
+    for (const note of notes) {
+      const topicName = note.topic || 'Uncategorized';
+      const topicKey = normalizeComparable(topicName);
+      const topic = topics.get(topicKey) || { name: topicName, noteCount: 0 };
+      topic.noteCount += 1;
+      topics.set(topicKey, topic);
+    }
+
+    return Array.from(topics.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }
+
+  async getNotesByTopic(domainName, sectionName, topicName) {
+    const notes = await this.getNotesBySection(domainName, sectionName);
+    const topicNotes = notes.filter(note => normalizeComparable(note.topic || 'Uncategorized') === normalizeComparable(topicName));
+
+    if (topicNotes.length === 0) {
+      throw new Error(`Topic "${topicName}" not found in section "${sectionName}"`);
+    }
+
+    return topicNotes;
   }
 
   async getAllNotes(limit = null, offset = 0) {

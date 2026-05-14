@@ -136,6 +136,28 @@ router.get('/:domain', checkVaultService, asyncHandler(async (req, res) => {
   }
 }));
 
+// GET /api/vault/:domain/:section/topics
+router.get('/:domain/:section/topics', checkVaultService, asyncHandler(async (req, res) => {
+  const { domain, section } = req.params;
+  try {
+    const topics = await vaultService.getTopicsBySection(domain, section);
+    res.json({ success: true, data: topics, domain, section, count: topics.length });
+  } catch (error) {
+    handleServiceError(error, res);
+  }
+}));
+
+// GET /api/vault/:domain/:section/topics/:topic
+router.get('/:domain/:section/topics/:topic', checkVaultService, asyncHandler(async (req, res) => {
+  const { domain, section, topic } = req.params;
+  try {
+    const notes = await vaultService.getNotesByTopic(domain, section, topic);
+    res.json({ success: true, data: notes, domain, section, topic, count: notes.length });
+  } catch (error) {
+    handleServiceError(error, res);
+  }
+}));
+
 // GET /api/vault/:domain/:section
 router.get('/:domain/:section', checkVaultService, asyncHandler(async (req, res) => {
   const { domain, section } = req.params;

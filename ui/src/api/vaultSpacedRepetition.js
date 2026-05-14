@@ -20,7 +20,9 @@ export const getVaultReviewSchedule = (options = {}) => {
   const queryString = params.toString();
   return get(`/api/vault-learning/review-schedule${queryString ? `?${queryString}` : ''}`);
 };
-export const getVaultStats = (vaultId) => get(`/api/vault-learning/vault-stats/${vaultId}`);
-export const getVaultTestHistory = (vaultId, limit = 10) => get(`/api/vault-learning/test-history/${vaultId}?limit=${limit}`);
+export const getVaultStats = (vaultId) => get(`/api/vault-learning/vault-stats/${encodeURIComponent(vaultId)}`);
+export const getVaultTestHistory = (vaultId, limit = 10) =>
+  get(`/api/vault-learning/test-history/${encodeURIComponent(vaultId)}?limit=${limit}`);
 export const resubmitVaultTest = (data) => post('/api/vault-learning/resubmit-test', data);
-export const getVaultResubmissionAnalytics = (vaultId) => get(`/api/vault-learning/resubmission-analytics/${vaultId}`);
+export const getVaultResubmissionAnalytics = (vaultId) =>
+  get(`/api/vault-learning/resubmission-analytics/${encodeURIComponent(vaultId)}`);

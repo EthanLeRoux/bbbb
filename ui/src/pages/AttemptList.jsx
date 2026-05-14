@@ -294,7 +294,7 @@ export default function AttemptList() {
                       <span style={styles.testId}>
                         {attempt.domainId && attempt.sectionId
                           ? `${attempt.domainId} / ${attempt.sectionId}`
-                          : attempt.vaultId.split('__').slice(0, 2).join(' / ')}
+                          : attempt.vaultId}
                         {attempt.isResubmission && (
                           <span style={{ marginLeft: 4, color: COLORS.diffMedium }}>[re-submit]</span>
                         )}

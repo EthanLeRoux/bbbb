@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getVaultTestHistory, resubmitVaultTest, getVaultResubmissionAnalytics } from '../api/vaultSpacedRepetition';
-import { get } from '../api/client';
+import { getAllNotes } from '../api/vault';
 import Skeleton from './Skeleton';
 import { COLORS, FONTS, SIZE, SPACE } from '../constants';
 
@@ -370,6 +370,10 @@ function getQualityStyle(quality) {
   }
 }
 
+function getVaultDisplay(test) {
+  return [test.domainId, test.sectionId].filter(Boolean).join('/') || test.vaultId || 'Unknown';
+}
+
 export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDomain, vaultSection, showAllAttempts = false }) {
   const [selectedTest, setSelectedTest] = useState(null);
   const [showResubmitForm, setShowResubmitForm] = useState(false);
@@ -388,12 +392,8 @@ export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDo
     queryKey: ['vault', 'all-notes-for-resubmit'],
     queryFn: async () => {
       try {
-        const notes = await get('/api/vault/notes?limit=100');
-        return notes.map(note => {
-          const sectionKey = note.section === '' ? '_root' : (note.section || '_root');
-          const noteId = note.fileName?.replace(/\.md$/i, '') || 'unknown';
-          return `${note.domain}__${sectionKey}__${noteId}`;
-        });
+        const notes = await getAllNotes(100);
+        return notes.map(note => note.id);
       } catch {
         return [];
       }
@@ -426,7 +426,10 @@ export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDo
         });
       });
       
-      return flattened.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+      return flattened.sort((a, b) =>
+        new Date(b.completedAt || b.submittedAt || b.createdAt) -
+        new Date(a.completedAt || a.submittedAt || a.createdAt)
+      );
     },
     enabled: vaultIdsToQuery.length > 0,
     retry: 1,
@@ -647,9 +650,7 @@ export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDo
   };
 
   const TestHistoryItem = ({ test }) => {
-    // Determine vault display name
-    const vaultParts = test.vaultId?.split('__') || [];
-    const vaultDisplay = vaultParts.length >= 2 ? `${vaultParts[0]}/${vaultParts[1]}` : test.vaultId || 'Unknown';
+    const vaultDisplay = getVaultDisplay(test);
     const isFromOtherVault = showAllAttempts && test.vaultId && test.vaultId !== vaultId;
     
     return (
@@ -675,7 +676,7 @@ export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDo
         
         <div style={styles.testDetails}>
           <div><strong>Score:</strong> {test.scorePercent}%</div>
-          <div><strong>Date:</strong> {formatDate(test.completedAt)}</div>
+          <div><strong>Date:</strong> {formatDate(test.completedAt || test.submittedAt || test.createdAt)}</div>
           {isFromOtherVault && (
             <div style={styles.vaultLabel}>Vault: {vaultDisplay}</div>
           )}
@@ -708,10 +709,10 @@ export default function TestResubmissionDashboard({ vaultId, vaultTitle, vaultDo
             <h4 style={styles.originalInfoTitle}>Original Test Results</h4>
             <div style={styles.originalInfoDetails}>
               <div><strong>Score:</strong> {selectedTest.scorePercent}%</div>
-              <div><strong>Quality:</strong> {selectedTest.recallQuality}</div>
-              <div><strong>Date:</strong> {formatDate(selectedTest.completedAt)}</div>
+              <div><strong>Quality:</strong> {selectedTest.recallQuality || 'n/a'}</div>
+              <div><strong>Date:</strong> {formatDate(selectedTest.completedAt || selectedTest.submittedAt || selectedTest.createdAt)}</div>
               {selectedTest.vaultId && (
-                <div><strong>Vault:</strong> {selectedTest.vaultId.split('__').slice(0, 2).join('/')}</div>
+                <div><strong>Vault:</strong> {getVaultDisplay(selectedTest)}</div>
               )}
             </div>
           </div>
