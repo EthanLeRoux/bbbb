@@ -54,6 +54,81 @@ body {
   margin: 0;
 }
 
+.analytics-chart-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.2);
+}
+
+.analytics-chart-card:focus-within {
+  border-color: var(--accent);
+}
+
+.analytics-modal-overlay {
+  animation: analyticsOverlayIn 160ms ease-out;
+}
+
+.analytics-modal {
+  animation: analyticsModalIn 180ms ease-out;
+}
+
+.analytics-modal-overlay.analytics-modal-closing {
+  animation: analyticsOverlayOut 170ms ease-in forwards;
+}
+
+.analytics-modal.analytics-modal-closing {
+  animation: analyticsModalOut 170ms ease-in forwards;
+}
+
+@keyframes analyticsOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes analyticsOverlayOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes analyticsModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes analyticsModalOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analytics-chart-card,
+  .analytics-modal-overlay,
+  .analytics-modal {
+    animation: none;
+    transition: none;
+  }
+}
+
 #root {
   width: 1126px;
   max-width: 100%;

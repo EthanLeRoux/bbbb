@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAttempts } from '../api/attempts';
 import Skeleton from '../components/Skeleton';
@@ -83,7 +83,7 @@ const styles = {
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))',
     gap: SPACE.lg,
   },
   panel: {
@@ -93,16 +93,13 @@ const styles = {
     padding: SPACE.md,
     minHeight: 360,
     overflow: 'hidden',
+    transition: 'transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
   },
   panelCollapsed: {
     minHeight: 0,
   },
   panelWide: {
     gridColumn: '1 / -1',
-  },
-  panelExpanded: {
-    gridColumn: '1 / -1',
-    minHeight: 560,
   },
   panelHeaderRow: {
     display: 'flex',
@@ -136,14 +133,43 @@ const styles = {
     fontSize: SIZE.xs,
     padding: `${SPACE.xs}px ${SPACE.sm}px`,
   },
+  panelIconButton: {
+    width: 32,
+    height: 30,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: SIZE.md,
+    lineHeight: 1,
+    padding: 0,
+  },
   panelPurpose: {
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
     color: COLORS.muted,
   },
+  chartClickTarget: {
+    cursor: 'zoom-in',
+    borderRadius: 6,
+    outline: 'none',
+  },
   chartWrap: {
     width: '100%',
     overflowX: 'auto',
+  },
+  chartToolbar: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    marginBottom: SPACE.sm,
+    flexWrap: 'wrap',
+  },
+  chartToolbarLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: SIZE.xs,
+    color: COLORS.muted,
+    textTransform: 'uppercase',
   },
   chartSvg: {
     width: '100%',
@@ -185,7 +211,7 @@ const styles = {
     borderRadius: 6,
   },
   heatmapExpanded: {
-    maxHeight: 720,
+    maxHeight: 'calc(90vh - 152px)',
   },
   heatmapGrid: {
     display: 'grid',
@@ -227,6 +253,52 @@ const styles = {
     fontFamily: FONTS.mono,
     fontSize: SIZE.xs,
     color: COLORS.bg,
+  },
+  modalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 1000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 'min(4vw, 24px)',
+    backgroundColor: 'rgba(0, 0, 0, 0.66)',
+    backdropFilter: 'blur(4px)',
+    WebkitBackdropFilter: 'blur(4px)',
+    boxSizing: 'border-box',
+  },
+  modal: {
+    width: '95vw',
+    height: '90vh',
+    maxWidth: 1500,
+    backgroundColor: COLORS.surface,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: 8,
+    boxShadow: '0 28px 80px rgba(0, 0, 0, 0.52)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: SPACE.md,
+    padding: `${SPACE.md}px ${SPACE.lg}px`,
+    borderBottom: `1px solid ${COLORS.border}`,
+    flexShrink: 0,
+  },
+  modalTitle: {
+    margin: 0,
+    marginBottom: SPACE.xs,
+    fontFamily: FONTS.serif,
+    fontSize: SIZE.xl,
+    color: COLORS.text,
+  },
+  modalBody: {
+    flex: 1,
+    overflow: 'auto',
+    padding: SPACE.lg,
   },
 };
 
@@ -403,7 +475,7 @@ function movingAverage(points, windowSize = 3) {
   });
 }
 
-function heatmapData(questions) {
+function heatmapData(questions, expanded = false) {
   const topics = uniq(questions.map(item => item.topic));
   const byTest = new Map();
 
@@ -421,9 +493,9 @@ function heatmapData(questions) {
 
   const tests = Array.from(byTest.values())
     .sort((a, b) => (dateValue(b.date)?.getTime() || 0) - (dateValue(a.date)?.getTime() || 0))
-    .slice(0, 18);
+    .slice(0, expanded ? 80 : 18);
 
-  return { topics: topics.slice(0, 14), tests };
+  return { topics: topics.slice(0, expanded ? 40 : 14), tests };
 }
 
 function testsFromQuestions(questions, allTests) {
@@ -477,21 +549,21 @@ function EmptyChart({ children }) {
   return <div style={styles.empty}>{children}</div>;
 }
 
-function chartSvgStyle(expanded) {
+function chartSvgStyle(expanded, minWidth = 900, height = 460) {
   return {
     ...styles.chartSvg,
-    height: expanded ? 460 : styles.chartSvg.height,
-    minWidth: expanded ? 900 : styles.chartSvg.minWidth,
+    height: expanded ? height : styles.chartSvg.height,
+    minWidth: expanded ? minWidth : styles.chartSvg.minWidth,
   };
 }
 
-function ChartPanel({ id, title, purpose, collapsed, expanded, wide = false, onToggleCollapse, onToggleExpand, children }) {
+function ChartPanel({ id, title, purpose, collapsed, wide = false, onToggleCollapse, onExpand, children }) {
   return (
     <section
+      className="analytics-chart-card"
       style={{
         ...styles.panel,
         ...(wide ? styles.panelWide : {}),
-        ...(expanded ? styles.panelExpanded : {}),
         ...(collapsed ? styles.panelCollapsed : {}),
       }}
     >
@@ -505,29 +577,169 @@ function ChartPanel({ id, title, purpose, collapsed, expanded, wide = false, onT
             {collapsed ? 'Show' : 'Collapse'}
           </button>
           {!collapsed && (
-            <button type="button" style={styles.panelButton} onClick={() => onToggleExpand(id)}>
-              {expanded ? 'Default' : 'Expand'}
+            <button
+              type="button"
+              aria-label={`Open ${title} fullscreen`}
+              title="Open fullscreen"
+              style={{ ...styles.panelButton, ...styles.panelIconButton }}
+              onClick={() => onExpand(id)}
+            >
+              ⛶
             </button>
           )}
         </div>
       </div>
-      {!collapsed && children}
+      {!collapsed && (
+        <div
+          role="button"
+          tabIndex={0}
+          title={`Open ${title} fullscreen`}
+          style={styles.chartClickTarget}
+          onClick={() => onExpand(id)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onExpand(id);
+            }
+          }}
+        >
+          {children}
+        </div>
+      )}
     </section>
   );
 }
 
+function ChartRenderer({ chart, fullscreen = false }) {
+  if (!chart) return null;
+  const Component = chart.component;
+  return <Component {...chart.props} expanded={fullscreen} fullscreen={fullscreen} detailed={fullscreen} />;
+}
+
+function ChartModal({ chart, onClose }) {
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+  const closeTimerRef = useRef(null);
+
+  const requestClose = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      closingRef.current = false;
+      setClosing(false);
+      onClose();
+    }, 170);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!chart) return undefined;
+    closingRef.current = false;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') requestClose();
+    };
+
+    window.addEventListener('keydown', closeOnEscape);
+    const resizeFrame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+      cancelAnimationFrame(resizeFrame);
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, [chart, requestClose]);
+
+  if (!chart) return null;
+
+  return (
+    <div
+      className={`analytics-modal-overlay${closing ? ' analytics-modal-closing' : ''}`}
+      style={styles.modalOverlay}
+      onMouseDown={requestClose}
+    >
+      <div
+        className={`analytics-modal${closing ? ' analytics-modal-closing' : ''}`}
+        style={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${chart.id}-fullscreen-title`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div style={styles.modalHeader}>
+          <div>
+            <h2 id={`${chart.id}-fullscreen-title`} style={styles.modalTitle}>{chart.title}</h2>
+            <div style={styles.panelPurpose}>{chart.purpose}</div>
+          </div>
+          <button
+            type="button"
+            aria-label="Close fullscreen chart"
+            title="Close"
+            style={{ ...styles.panelButton, ...styles.panelIconButton }}
+            onClick={requestClose}
+          >
+            X
+          </button>
+        </div>
+        <div style={styles.modalBody}>
+          <ChartRenderer chart={chart} fullscreen />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BarChart({ data, groupLevel, expanded = false }) {
+  const [sortBy, setSortBy] = useState('accuracy');
   if (!data.length) return <EmptyChart>No topic performance data for these filters.</EmptyChart>;
 
+  const sortedData = expanded
+    ? [...data].sort((a, b) => {
+      if (sortBy === 'label') return a.label.localeCompare(b.label);
+      if (sortBy === 'questions') return b.questions - a.questions;
+      return a.accuracy - b.accuracy;
+    })
+    : data;
   const innerWidth = CHART.width - CHART.left - CHART.right;
   const innerHeight = CHART.height - CHART.top - CHART.bottom;
   const barGap = 10;
-  const barWidth = Math.max(18, (innerWidth - barGap * (data.length - 1)) / data.length);
+  const barWidth = Math.max(expanded ? 34 : 18, (innerWidth - barGap * (sortedData.length - 1)) / sortedData.length);
   const label = groupLevel === 'domain' ? 'Domains' : groupLevel === 'section' ? 'Sections' : 'Topics';
+  const minWidth = Math.max(900, sortedData.length * (expanded ? 86 : 56));
 
   return (
-    <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded)} role="img" aria-label="Topic performance bar chart">
+    <>
+      {expanded && (
+        <div style={styles.chartToolbar} onClick={(event) => event.stopPropagation()}>
+          <span style={styles.chartToolbarLabel}>Sort</span>
+          {[
+            ['accuracy', 'Score'],
+            ['questions', 'Questions'],
+            ['label', label],
+          ].map(([value, text]) => (
+            <button
+              key={value}
+              type="button"
+              style={{
+                ...styles.panelButton,
+                borderColor: sortBy === value ? COLORS.accent : COLORS.border,
+                color: sortBy === value ? COLORS.accent : COLORS.text,
+              }}
+              onClick={() => setSortBy(value)}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={styles.chartWrap}>
+      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded, minWidth, 500)} role="img" aria-label="Topic performance bar chart">
         <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         {[0, 25, 50, 75, 100].map(tick => {
@@ -539,7 +751,7 @@ function BarChart({ data, groupLevel, expanded = false }) {
             </g>
           );
         })}
-        {data.map((item, index) => {
+        {sortedData.map((item, index) => {
           const x = CHART.left + index * (barWidth + barGap);
           const height = (item.accuracy / 100) * innerHeight;
           const y = CHART.top + innerHeight - height;
@@ -551,8 +763,14 @@ function BarChart({ data, groupLevel, expanded = false }) {
               <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" fill={COLORS.text} fontFamily={FONTS.mono} fontSize="11">
                 {pct(item.accuracy)}
               </text>
-              <text x={x + barWidth / 2} y={CHART.top + innerHeight + 18} textAnchor="middle" {...axisTextProps()}>
-                {item.label.length > 10 ? `${item.label.slice(0, 10)}...` : item.label}
+              <text
+                x={x + barWidth / 2}
+                y={CHART.top + innerHeight + 18}
+                textAnchor={expanded ? 'end' : 'middle'}
+                transform={expanded ? `rotate(-35 ${x + barWidth / 2} ${CHART.top + innerHeight + 18})` : undefined}
+                {...axisTextProps()}
+              >
+                {expanded ? item.label : item.label.length > 10 ? `${item.label.slice(0, 10)}...` : item.label}
               </text>
               <text x={x + barWidth / 2} y={CHART.top + innerHeight + 34} textAnchor="middle" {...axisTextProps()}>
                 {item.questions}q
@@ -562,7 +780,8 @@ function BarChart({ data, groupLevel, expanded = false }) {
         })}
         <text x={CHART.left + innerWidth / 2} y={CHART.height - 4} textAnchor="middle" {...axisTextProps()}>{label}</text>
       </svg>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -579,7 +798,7 @@ function LineChart({ data, showMovingAverage, expanded = false }) {
 
   return (
     <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded)} role="img" aria-label="Progress over time line chart">
+      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded, Math.max(900, data.length * 88), 500)} role="img" aria-label="Progress over time line chart">
         <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         {[0, 25, 50, 75, 100].map(tick => {
@@ -591,17 +810,17 @@ function LineChart({ data, showMovingAverage, expanded = false }) {
             </g>
           );
         })}
-        <path d={path} fill="none" stroke={COLORS.accent} strokeWidth="3" />
-        {showMovingAverage && <path d={maPath} fill="none" stroke={COLORS.success} strokeWidth="2" strokeDasharray="5 5" />}
+        <path d={path} fill="none" stroke={COLORS.accent} strokeWidth={expanded ? 4 : 3} />
+        {showMovingAverage && <path d={maPath} fill="none" stroke={COLORS.success} strokeWidth={expanded ? 3 : 2} strokeDasharray="5 5" />}
         {data.map((point, index) => (
-          <circle key={point.id} cx={xFor(point, index)} cy={yFor(point.score)} r="5" fill={COLORS.accent}>
+          <circle key={point.id} cx={xFor(point, index)} cy={yFor(point.score)} r={expanded ? 7 : 5} fill={COLORS.accent}>
             <title>{`${formatDate(point.date)}: ${pct(point.score)} (${point.questionCount} questions)`}</title>
           </circle>
         ))}
         {data.map((point, index) => (
-          index % Math.ceil(data.length / 6) === 0 && (
+          index % Math.ceil(data.length / (expanded ? 12 : 6)) === 0 && (
             <text key={`label-${point.id}`} x={xFor(point, index)} y={CHART.top + innerHeight + 20} textAnchor="middle" {...axisTextProps()}>
-              {formatShortDate(point.date)}
+              {expanded ? formatDate(point.date) : formatShortDate(point.date)}
             </text>
           )
         ))}
@@ -621,7 +840,7 @@ function ScatterPlot({ data, expanded = false }) {
 
   return (
     <div style={styles.chartWrap}>
-      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded)} role="img" aria-label="Time vs score scatter plot">
+      <svg viewBox={`0 0 ${CHART.width} ${CHART.height}`} style={chartSvgStyle(expanded, 960, 500)} role="img" aria-label="Time vs score scatter plot">
         <line x1={CHART.left} y1={CHART.top} x2={CHART.left} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         <line x1={CHART.left} y1={CHART.top + innerHeight} x2={CHART.left + innerWidth} y2={CHART.top + innerHeight} stroke={COLORS.border} />
         {[0, 25, 50, 75, 100].map(tick => {
@@ -635,7 +854,7 @@ function ScatterPlot({ data, expanded = false }) {
         {data.map((point) => {
           const x = CHART.left + (point.totalTime / maxTime) * innerWidth;
           const y = CHART.top + innerHeight - (point.score / 100) * innerHeight;
-          const r = clamp(4 + point.questionCount, 5, 16);
+          const r = clamp((expanded ? 6 : 4) + point.questionCount, expanded ? 8 : 5, expanded ? 22 : 16);
           const color = palette[domains.indexOf(point.domain) % palette.length] || COLORS.accent;
           return (
             <circle key={point.id} cx={x} cy={y} r={r} fill={color} opacity="0.78" stroke={COLORS.bg} strokeWidth="1">
@@ -653,18 +872,20 @@ function Heatmap({ data, expanded = false }) {
   const { topics, tests } = data;
   if (!topics.length || !tests.length) return <EmptyChart>No topic-by-test data for these filters.</EmptyChart>;
 
+  const cellWidth = expanded ? 116 : 92;
+
   return (
     <div style={{ ...styles.heatmap, ...(expanded ? styles.heatmapExpanded : {}) }}>
       <div
         style={{
           ...styles.heatmapGrid,
-          gridTemplateColumns: `180px repeat(${topics.length}, 92px)`,
+          gridTemplateColumns: `${expanded ? 220 : 180}px repeat(${topics.length}, ${cellWidth}px)`,
         }}
       >
         <div style={{ ...styles.heatmapHeader, left: 0 }}>Test</div>
         {topics.map(topic => (
           <div key={topic} style={styles.heatmapHeader} title={topic}>
-            {topic.length > 12 ? `${topic.slice(0, 12)}...` : topic}
+            {expanded ? topic : topic.length > 12 ? `${topic.slice(0, 12)}...` : topic}
           </div>
         ))}
         {tests.map(test => (
@@ -681,6 +902,9 @@ function Heatmap({ data, expanded = false }) {
                   key={`${test.testId}-${topic}`}
                   style={{
                     ...styles.heatmapCell,
+                    width: cellWidth,
+                    minHeight: expanded ? 48 : styles.heatmapCell.minHeight,
+                    fontSize: expanded ? SIZE.sm : styles.heatmapCell.fontSize,
                     backgroundColor: valueToColor(value),
                     opacity: value == null ? 0.22 : 0.92,
                     color: value == null ? COLORS.muted : COLORS.bg,
@@ -708,7 +932,7 @@ export default function Statistics() {
   });
   const [showMovingAverage, setShowMovingAverage] = useState(true);
   const [collapsedCharts, setCollapsedCharts] = useState({});
-  const [expandedChart, setExpandedChart] = useState(null);
+  const [expandedChartId, setExpandedChartId] = useState(null);
 
   const {
     data: attempts = [],
@@ -742,9 +966,55 @@ export default function Statistics() {
   const barData = useMemo(() => topicPerformance(filteredQuestions, groupLevel), [filteredQuestions, groupLevel]);
   const lineData = useMemo(() => progressSeries(filteredTests), [filteredTests]);
   const heatData = useMemo(() => heatmapData(filteredQuestions), [filteredQuestions]);
+  const expandedHeatData = useMemo(() => heatmapData(filteredQuestions, true), [filteredQuestions]);
   const avgScore = average(filteredTests.map(test => test.score));
   const avgTime = average(filteredTests.map(test => test.totalTime));
   const weakest = barData[0]?.label || 'Not enough data';
+
+  const charts = useMemo(() => [
+    {
+      id: 'topic-performance',
+      title: 'Topic Performance',
+      purpose: 'Compare strengths and weaknesses across the current hierarchy level.',
+      component: BarChart,
+      props: { data: barData, groupLevel },
+    },
+    {
+      id: 'progress-over-time',
+      title: 'Progress Over Time',
+      purpose: 'See improvement trends and score consistency across tests.',
+      component: LineChart,
+      props: { data: lineData, showMovingAverage },
+    },
+    {
+      id: 'time-vs-score',
+      title: 'Time vs Score',
+      purpose: 'Find whether longer attempts are improving accuracy or just costing time.',
+      component: ScatterPlot,
+      props: { data: filteredTests },
+    },
+    {
+      id: 'topic-vs-test',
+      title: 'Topic vs Test',
+      purpose: 'Identify topics that stay weak across multiple tests.',
+      component: Heatmap,
+      props: { data: heatData },
+      fullscreenProps: { data: expandedHeatData },
+      wide: true,
+    },
+  ], [barData, expandedHeatData, filteredTests, groupLevel, heatData, lineData, showMovingAverage]);
+
+  const expandedChart = useMemo(() => {
+    const chart = charts.find(item => item.id === expandedChartId);
+    if (!chart) return null;
+    return {
+      ...chart,
+      props: {
+        ...chart.props,
+        ...(chart.fullscreenProps || {}),
+      },
+    };
+  }, [charts, expandedChartId]);
 
   const updateFilter = (key, value) => {
     setFilters(prev => {
@@ -765,17 +1035,12 @@ export default function Statistics() {
       const next = { ...prev, [id]: !prev[id] };
       return next;
     });
-    if (expandedChart === id) {
-      setExpandedChart(null);
+    if (expandedChartId === id) {
+      setExpandedChartId(null);
     }
   };
 
-  const toggleExpand = (id) => {
-    setExpandedChart(prev => (prev === id ? null : id));
-  };
-
   const isCollapsed = (id) => !!collapsedCharts[id];
-  const isExpanded = (id) => expandedChart === id;
 
   if (error) {
     return (
@@ -864,55 +1129,23 @@ export default function Statistics() {
           </div>
 
           <div style={styles.grid}>
-            <ChartPanel
-              id="topic-performance"
-              title="Topic Performance"
-              purpose="Compare strengths and weaknesses across the current hierarchy level."
-              collapsed={isCollapsed('topic-performance')}
-              expanded={isExpanded('topic-performance')}
-              onToggleCollapse={toggleCollapse}
-              onToggleExpand={toggleExpand}
-            >
-              <BarChart data={barData} groupLevel={groupLevel} expanded={isExpanded('topic-performance')} />
-            </ChartPanel>
-
-            <ChartPanel
-              id="progress-over-time"
-              title="Progress Over Time"
-              purpose="See improvement trends and score consistency across tests."
-              collapsed={isCollapsed('progress-over-time')}
-              expanded={isExpanded('progress-over-time')}
-              onToggleCollapse={toggleCollapse}
-              onToggleExpand={toggleExpand}
-            >
-              <LineChart data={lineData} showMovingAverage={showMovingAverage} expanded={isExpanded('progress-over-time')} />
-            </ChartPanel>
-
-            <ChartPanel
-              id="time-vs-score"
-              title="Time vs Score"
-              purpose="Find whether longer attempts are improving accuracy or just costing time."
-              collapsed={isCollapsed('time-vs-score')}
-              expanded={isExpanded('time-vs-score')}
-              onToggleCollapse={toggleCollapse}
-              onToggleExpand={toggleExpand}
-            >
-              <ScatterPlot data={filteredTests} expanded={isExpanded('time-vs-score')} />
-            </ChartPanel>
-
-            <ChartPanel
-              id="topic-vs-test"
-              title="Topic vs Test"
-              purpose="Identify topics that stay weak across multiple tests."
-              collapsed={isCollapsed('topic-vs-test')}
-              expanded={isExpanded('topic-vs-test')}
-              wide
-              onToggleCollapse={toggleCollapse}
-              onToggleExpand={toggleExpand}
-            >
-              <Heatmap data={heatData} expanded={isExpanded('topic-vs-test')} />
-            </ChartPanel>
+            {charts.map(chart => (
+              <ChartPanel
+                key={chart.id}
+                id={chart.id}
+                title={chart.title}
+                purpose={chart.purpose}
+                collapsed={isCollapsed(chart.id)}
+                wide={chart.wide}
+                onToggleCollapse={toggleCollapse}
+                onExpand={setExpandedChartId}
+              >
+                <ChartRenderer chart={chart} />
+              </ChartPanel>
+            ))}
           </div>
+
+          <ChartModal chart={expandedChart} onClose={() => setExpandedChartId(null)} />
         </>
       )}
     </div>
