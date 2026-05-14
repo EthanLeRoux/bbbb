@@ -18,31 +18,33 @@ let app = null;
  */
 function initializeFirebase() {
   if (db) {
-    return db; // Return existing instance if already initialized
+    return db;
   }
 
   try {
-    // Load service account key from local file
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT || 
-      path.join(__dirname, 'service-account-key.json');
+    let serviceAccount;
 
-    if (!fs.existsSync(serviceAccountPath)) {
-      throw new Error(`Service account key file not found at: ${serviceAccountPath}`);
+    // Render / production: FIREBASE_SERVICE_ACCOUNT contains raw JSON
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } else {
+      // Local development fallback: service-account-key.json file
+      const localPath = path.join(__dirname, 'service-account-key.json');
+
+      if (!fs.existsSync(localPath)) {
+        throw new Error(`Service account key file not found at: ${localPath}`);
+      }
+
+      serviceAccount = require(localPath);
     }
 
-    const serviceAccount = require(serviceAccountPath);
-
-    // Initialize Firebase Admin SDK
     app = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)
     });
 
-    // Get Firestore instance
     db = admin.firestore();
 
-    // Configure Firestore settings
     db.settings({
-      timestampsInSnapshots: true,
       ignoreUndefinedProperties: false
     });
 
