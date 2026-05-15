@@ -1,70 +1,131 @@
-import { useLayoutEffect } from 'react';
-import { StyleSheet, Text } from 'react-native';
-import { Card, Refresh, ScreenScaffold, StateBlock } from '../components/ScreenScaffold';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  StyleSheet,
+} from 'react-native';
+
 import { getSections } from '../api/vault';
-import useAsyncData from '../hooks/useAsyncData';
-import { colors, fonts, typography } from '../theme';
-import { asList, itemTitle } from './shared';
+import { colors, spacing, typography } from '../theme';
 
 export default function VaultSectionsScreen({ navigation, route }) {
   const { domain } = route.params;
 
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: domain });
-  }, [navigation, domain]);
+  const [sections, setSections] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const load = () => getSections(domain);
-  const { data, error, loading, refresh } = useAsyncData(load, [domain]);
+  const fetchSections = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  // The endpoint returns the domain object which has a sections array
-  let sections = [];
-  if (Array.isArray(data)) {
-    sections = data;
-  } else if (Array.isArray(data?.sections)) {
-    sections = data.sections;
-  } else {
-    sections = asList(data);
-  }
+      const data = await getSections(domain);
+
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.sections)
+        ? data.sections
+        : [];
+
+      setSections(list);
+    } catch (err) {
+      setError(err?.message || 'Failed to load sections');
+      setSections([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSections();
+  }, [domain]);
 
   return (
-    <ScreenScaffold
-      eyebrow={domain}
-      refreshControl={<Refresh loading={loading} onRefresh={refresh} />}
-      subtitle="Select a section to browse topics and notes."
-      title="Sections"
-    >
-      {loading || error ? (
-        <StateBlock error={error} loading={loading} onAction={refresh} title="Sections unavailable" />
-      ) : sections.length === 0 ? (
-        <StateBlock message="No sections found in this domain." title="No sections" />
-      ) : (
-        sections.map((section) => {
-          const name = itemTitle(section);
+    <View style={styles.container}>
+      <Text style={styles.title}>{domain}</Text>
+
+      {loading && <Text style={styles.infoText}>Loading sections...</Text>}
+      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={fetchSections} />
+        }
+      >
+        {sections.map((section, index) => {
+          const name = section?.name ?? String(section);
+
           return (
-            <Card
-              key={name}
-              onPress={() => navigation.navigate('VaultTopics', { domain, section: name })}
+            <TouchableOpacity
+              key={section?.id ?? index}
+              onPress={() =>
+                navigation.navigate('VaultTopics', {
+                  domain,
+                  section: name,
+                })
+              }
+              style={styles.card}
             >
-              <Text style={styles.title}>{name}</Text>
-              <Text style={styles.meta}>Section  →</Text>
-            </Card>
+              <Text style={styles.cardTitle}>{name}</Text>
+              <Text style={styles.cardSubtitle}>Section →</Text>
+            </TouchableOpacity>
           );
-        })
-      )}
-    </ScreenScaffold>
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  meta: {
-    color: colors.accent,
-    fontFamily: fonts.mono,
-    fontSize: typography.caption,
-    textTransform: 'uppercase',
+  container: {
+    flex: 1,
+    padding: spacing.lg,
+    backgroundColor: colors.background,
   },
+
   title: {
-    color: colors.text,
-    fontFamily: fonts.serif,
     fontSize: typography.subtitle,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+
+  infoText: {
+    color: colors.muted,
+    marginBottom: spacing.sm,
+  },
+
+  errorText: {
+    color: colors.danger,
+    marginBottom: spacing.sm,
+  },
+
+  scrollContent: {
+    paddingBottom: spacing.xl,
+  },
+
+  card: {
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.sm,
+    borderRadius: 8,
+  },
+
+  cardTitle: {
+    fontSize: typography.body,
+    color: colors.text,
+    marginBottom: 4,
+  },
+
+  cardSubtitle: {
+    fontSize: typography.caption,
+    color: colors.muted,
   },
 });
