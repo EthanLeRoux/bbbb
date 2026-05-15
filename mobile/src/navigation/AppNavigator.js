@@ -4,6 +4,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet, Text } from 'react-native';
 import DashboardScreen from '../screens/DashboardScreen';
 import VaultScreen from '../screens/VaultScreen';
+import VaultSectionsScreen from '../screens/VaultSectionsScreen';
+import VaultTopicsScreen from '../screens/VaultTopicsScreen';
+import VaultNotesScreen from '../screens/VaultNotesScreen';
+import VaultNoteScreen from '../screens/VaultNoteScreen';
+import VaultSearchScreen from '../screens/VaultSearchScreen';
 import GenerateTestScreen from '../screens/GenerateTestScreen';
 import TestsScreen from '../screens/TestsScreen';
 import TestDetailScreen from '../screens/TestDetailScreen';
@@ -80,6 +85,35 @@ export default function AppNavigator() {
         }}
       >
         <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+
+        {/* Vault drill-down */}
+        <Stack.Screen
+          name="VaultSections"
+          component={VaultSectionsScreen}
+          options={{ title: 'Sections' }}
+        />
+        <Stack.Screen
+          name="VaultTopics"
+          component={VaultTopicsScreen}
+          options={{ title: 'Topics' }}
+        />
+        <Stack.Screen
+          name="VaultNotes"
+          component={VaultNotesScreen}
+          options={{ title: 'Notes' }}
+        />
+        <Stack.Screen
+          name="VaultNote"
+          component={VaultNoteScreen}
+          options={{ title: 'Note' }}
+        />
+        <Stack.Screen
+          name="VaultSearch"
+          component={VaultSearchScreen}
+          options={{ title: 'Search Vault' }}
+        />
+
+        {/* Existing screens */}
         <Stack.Screen name="GenerateTest" component={GenerateTestScreen} options={{ title: 'Generate Test' }} />
         <Stack.Screen name="TestDetail" component={TestDetailScreen} options={{ title: 'Test Detail' }} />
         <Stack.Screen name="AttemptDetail" component={AttemptDetailScreen} options={{ title: 'Attempt Detail' }} />
