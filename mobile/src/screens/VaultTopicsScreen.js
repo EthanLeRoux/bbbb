@@ -1,10 +1,15 @@
-import { useLayoutEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Card, Refresh, ScreenScaffold, StateBlock } from '../components/ScreenScaffold';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  StyleSheet,
+} from 'react-native';
+
 import { getNotes, getTopics } from '../api/vault';
-import useAsyncData from '../hooks/useAsyncData';
-import { colors, fonts, spacing, typography } from '../theme';
-import { asList, itemTitle } from './shared';
+import { colors, spacing, typography } from '../theme';
 
 function Badge({ label }) {
   return (
@@ -17,144 +22,203 @@ function Badge({ label }) {
 export default function VaultTopicsScreen({ navigation, route }) {
   const { domain, section } = route.params;
 
+  const [topics, setTopics] = useState([]);
+  const [directNotes, setDirectNotes] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   useLayoutEffect(() => {
     navigation.setOptions({ title: section });
   }, [navigation, section]);
 
-  const loadTopics = () => getTopics(domain, section);
-  const loadNotes = () => getNotes(domain, section);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  const topics$ = useAsyncData(loadTopics, [domain, section]);
-  const notes$ = useAsyncData(loadNotes, [domain, section]);
+      const [topicsData, notesData] = await Promise.all([
+        getTopics(domain, section),
+        getNotes(domain, section),
+      ]);
 
-  const topics = asList(topics$.data);
-  // Direct notes (not under a topic) live at the section level
-  let directNotes = [];
-  if (Array.isArray(notes$.data?.notes)) {
-    directNotes = notes$.data.notes;
-  } else if (Array.isArray(notes$.data)) {
-    directNotes = notes$.data;
-  }
+      // Topics
+      const topicsList = Array.isArray(topicsData)
+        ? topicsData
+        : Array.isArray(topicsData?.topics)
+        ? topicsData.topics
+        : [];
 
-  const loading = topics$.loading || notes$.loading;
-  const error = topics$.error || notes$.error;
+      setTopics(topicsList);
+
+      // Direct notes
+      const notesList = Array.isArray(notesData?.notes)
+        ? notesData.notes
+        : Array.isArray(notesData)
+        ? notesData
+        : [];
+
+      setDirectNotes(notesList);
+    } catch (err) {
+      setError(err?.message || 'Failed to load section');
+      setTopics([]);
+      setDirectNotes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [domain, section]);
 
   return (
-    <ScreenScaffold
-      eyebrow={`${domain} › ${section}`}
-      refreshControl={
-        <Refresh
-          loading={loading}
-          onRefresh={() => { topics$.refresh(); notes$.refresh(); }}
-        />
-      }
-      subtitle="Topics and notes in this section."
-      title="Browse"
-    >
-      {loading && topics.length === 0 && directNotes.length === 0 ? (
-        <StateBlock loading title="Loading section…" />
-      ) : error && topics.length === 0 && directNotes.length === 0 ? (
-        <StateBlock
-          error={error}
-          onAction={() => { topics$.refresh(); notes$.refresh(); }}
-          title="Section unavailable"
-        />
-      ) : (
-        <>
-          {topics.length > 0 && (
-            <View style={styles.group}>
-              <Text style={styles.groupLabel}>Topics</Text>
-              {topics.map((topic) => {
-                const name = itemTitle(topic);
-                return (
-                  <Card
-                    key={name}
-                    onPress={() =>
-                      navigation.navigate('VaultNotes', { domain, section, topic: name })
-                    }
-                  >
-                    <View style={styles.row}>
-                      <Text style={styles.title}>{name}</Text>
-                      <Badge label="topic" />
-                    </View>
-                    <Text style={styles.meta}>Browse notes  →</Text>
-                  </Card>
-                );
-              })}
-            </View>
-          )}
+    <View style={styles.container}>
+      <Text style={styles.sectionPath}>
+        {domain} → {section}
+      </Text>
 
-          {directNotes.length > 0 && (
-            <View style={styles.group}>
-              <Text style={styles.groupLabel}>Notes</Text>
-              {directNotes.map((note) => {
-                const id = note.id || note.slug || itemTitle(note);
-                const title = itemTitle(note);
-                return (
-                  <Card
-                    key={id}
-                    onPress={() =>
-                      navigation.navigate('VaultNote', { domain, section, noteId: id, title })
-                    }
-                  >
-                    <View style={styles.row}>
-                      <Text style={styles.title}>{title}</Text>
-                      <Badge label="note" />
-                    </View>
-                    {note.topic ? <Text style={styles.meta}>Topic: {note.topic}</Text> : null}
-                  </Card>
-                );
-              })}
-            </View>
-          )}
-
-          {topics.length === 0 && directNotes.length === 0 && (
-            <StateBlock message="Nothing found in this section yet." title="Empty section" />
-          )}
-        </>
+      {loading && (
+        <Text style={styles.infoText}>Loading section...</Text>
       )}
-    </ScreenScaffold>
+
+      {error && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={fetchData} />
+        }
+      >
+        {/* Topics */}
+        {topics.length > 0 && (
+          <View style={styles.group}>
+            <Text style={styles.groupLabel}>Topics</Text>
+
+            {topics.map((topic, index) => {
+              const name =
+                topic?.name ??
+                topic?.title ??
+                String(topic);
+
+              return (
+                <TouchableOpacity
+                  key={topic?.id ?? name ?? index}
+                  style={styles.card}
+                  onPress={() =>
+                    navigation.navigate('VaultNotes', {
+                      domain,
+                      section,
+                      topic: name,
+                    })
+                  }
+                >
+                  <View style={styles.row}>
+                    <Text style={styles.cardTitle}>{name}</Text>
+                    <Badge label="topic" />
+                  </View>
+
+                  <Text style={styles.cardSubtitle}>
+                    Browse notes →
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {!loading &&
+          topics.length === 0 &&
+          directNotes.length === 0 && (
+            <Text style={styles.infoText}>
+              Nothing found in this section yet.
+            </Text>
+          )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: spacing.lg,
+    backgroundColor: colors.background,
+  },
+
+  sectionPath: {
+    fontSize: typography.caption,
+    color: colors.muted,
+    marginBottom: spacing.md,
+  },
+
+  infoText: {
+    color: colors.muted,
+    marginBottom: spacing.sm,
+  },
+
+  errorText: {
+    color: colors.danger,
+    marginBottom: spacing.sm,
+  },
+
+  scrollContent: {
+    paddingBottom: spacing.xl,
+  },
+
+  group: {
+    marginBottom: spacing.lg,
+  },
+
+  groupLabel: {
+    color: colors.muted,
+    fontSize: typography.caption,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+
+  card: {
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.sm,
+    borderRadius: 8,
+  },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 4,
+  },
+
+  cardTitle: {
+    flex: 1,
+    fontSize: typography.body,
+    color: colors.text,
+  },
+
+  cardSubtitle: {
+    fontSize: typography.caption,
+    color: colors.muted,
+  },
+
   badge: {
     backgroundColor: colors.accentMuted,
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
+
   badgeText: {
     color: colors.accent,
-    fontFamily: fonts.mono,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
-  },
-  group: { gap: 8 },
-  groupLabel: {
-    color: colors.muted,
-    fontFamily: fonts.mono,
-    fontSize: typography.caption,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  meta: {
-    color: colors.muted,
-    fontFamily: fonts.mono,
-    fontSize: typography.caption,
-    textTransform: 'uppercase',
-  },
-  row: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'space-between',
-  },
-  title: {
-    color: colors.text,
-    flex: 1,
-    fontFamily: fonts.serif,
-    fontSize: typography.subtitle,
   },
 });
